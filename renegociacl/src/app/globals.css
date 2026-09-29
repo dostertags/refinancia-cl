@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tokens semánticos. Cada par de color se verifica en tests/contraste.test.ts (WCAG AA, tema claro y oscuro). */
+:root {
+  --fondo: #f8fafc;
+  --superficie: #ffffff;
+  --superficie-2: #f1f5f9;
+  --texto: #0f172a;
+  --suave: #475569;
+  --borde: #cbd5e1;
+  --borde-input: #64748b;
+  --brand: #0f766e;
+  --sobre-brand: #ffffff;
+  --brand-fondo: #e6f7f5;
+  --ok: #15803d;
+  --mal: #b91c1c;
+  --aviso-fondo: #fffbeb;
+  --aviso-texto: #78350f;
+  --error-fondo: #fef2f2;
+  --error-texto: #991b1b;
+}
+
+.dark {
+  --fondo: #0b1220;
+  --superficie: #111a2b;
+  --superficie-2: #182338;
+  --texto: #e8eef7;
+  --suave: #a9b7cb;
+  --borde: #33415a;
+  --borde-input: #7d8ca3;
+  --brand: #2dd4bf;
+  --sobre-brand: #04211e;
+  --brand-fondo: #0f2f2f;
+  --ok: #4ade80;
+  --mal: #f87171;
+  --aviso-fondo: #2b2110;
+  --aviso-texto: #fde68a;
+  --error-fondo: #2f1416;
+  --error-texto: #fecaca;
+}
+
+html { color-scheme: light; }
+html.dark { color-scheme: dark; }
+body { @apply bg-fondo text-texto antialiased; font-variant-numeric: tabular-nums; }
+
+:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff !important; color: #000 !important; }
+  details { display: block; }
+  details > summary { list-style: none; }
+  details:not([open]) > *:not(summary) { display: block; }
+}

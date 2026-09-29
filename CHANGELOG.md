@@ -1,0 +1,48 @@
+# Changelog
+
+Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
+
+## [0.2.0] — Correcciones de la auditoría
+
+### Seguridad y privacidad
+- **PDF:** todo texto del usuario se escapa antes de `Paragraph` (antes: error 500 y SSRF vía `<img src=...>`).
+- API sin bloqueo del event loop (solver en hilo, concurrencia acotada), **rate limit por IP** (429 + `Retry-After`),
+  límites de 30 deudas y 20 ofertas, cabeceras de seguridad (CSP, nosniff, DENY, no-store), HTTPS forzado opcional con HSTS.
+- Errores 422 en español y **sin devolver el valor enviado**.
+- Tests con valores centinela verifican que renta/deudas no llegan a BD ni logs; tests de inyección SQL/XSS.
+- Frontend actualizado a Next 16 / React 19: `npm audit` sin vulnerabilidades (antes 1 crítica y 1 alta).
+- `docker-compose` exige `POSTGRES_PASSWORD`; healthcheck; `.env.example`.
+
+### Correcciones financieras y regulatorias
+- Resultados declaran el **origen de las ofertas** (`fuente_ofertas`, `aviso_ofertas`); las ofertas ilustrativas y las del
+  usuario se advierten en UI y PDF; el cliente no puede hacerse pasar por SERNAC.
+- **R3 completa:** cuota mínima de tarjeta = mayor entre amortización a 24 meses e intereses + comisiones; tarjetas dejadas
+  fuera pagan al menos ese mínimo; la regla se verifica sobre el resultado real.
+- **R7 (60 meses)** visible en la verificación de reglas y con aviso cuando se recorta un plazo.
+- **Coherencia de datos:** `DATOS_INCONSISTENTES` si la cuota no calza con monto, tasa y plazo (antes: ahorros falsos).
+- **CAE actual** calculada por TIR de flujos reales (misma vara que la CAE nueva); se explica cuando el ahorro viene de
+  pagar más rápido y cuando la cuota mensual sube.
+- `NO_CONVIENE` ya no entrega una propuesta peor que la actual.
+- Alertas: carga actual > 25%, deudas en UF sin reajuste, ingresos adicionales no verificados, cuota de tarjeta bajo el mínimo.
+- Deuda de monto $0 → mensaje educativo. Semáforo: verde estrictamente < 15%.
+- Modo **"menor cuota posible"** (`objetivo="cuota"`, opción de tarjetas > 24 meses).
+- Textos legales: los topes se declaran "criterios de esta herramienta"; consentimiento expreso obligatorio (UI y API).
+
+### Rendimiento
+- Grilla de plazos reducida y `gapRel` en CBC: 20 deudas × 8 ofertas pasó de 11,3 s a < 1 s.
+
+### Scraper
+- User-Agent propio, robots.txt, reintentos con backoff, validación de rangos, rechazo de lotes chicos, soporte de grilla
+  ARIA, ofertas obsoletas descartadas, límite de frecuencia. **Sigue sin probarse contra el sitio real.**
+- El benchmark CMF ya no devuelve una cifra inventada (`null`).
+
+### Frontend
+- Glosario de CAE/CTC/retracto/NCG 537, explicación "¿Y ahora qué hago?", etiquetas asociadas (accesibilidad),
+  gráficos separados, disclaimers legibles, mensajes de error de la API en español.
+- 21 tests de componentes y E2E Playwright escrito (no ejecutado).
+
+### Documentación
+- `docs/REGULACION.md`, `docs/LEGAL.md`, `docs/SERNAC_DATOS_REALES.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`.
+
+## [0.1.0] — Versión inicial
+Motor MILP, API, PDF, frontend de 4 pasos, scraper base, Docker y CI.

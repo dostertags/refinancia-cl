@@ -1,0 +1,33 @@
+# Desarrollo local: docker compose up --build
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: refinancia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
+      POSTGRES_DB: refinancia
+    volumes: [pgdata:/var/lib/postgresql/data]  # TODO: cifrado en reposo del volumen en producción
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U refinancia"], interval: 5s, retries: 10}
+  redis:
+    image: redis:7-alpine
+  api:
+    build:
+      context: ./backend
+      args: {INSTALL_PLAYWRIGHT: "1"}
+    environment:
+      DATABASE_URL: postgresql+psycopg2://refinancia:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}@db:5432/refinancia
+      REDIS_URL: redis://redis:6379/0
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      CORS_ORIGINS: http://localhost:3000
+      PUBLIC_URL: http://localhost:3000
+      FORCE_HTTPS: "0"  # 1 en producción detrás de TLS
+    depends_on: {db: {condition: service_healthy}, redis: {condition: service_started}}
+    ports: ["8000:8000"]
+  web:
+    build:
+      context: ./frontend
+      args: {NEXT_PUBLIC_API_URL: http://localhost:8000}
+    depends_on: [api]
+    ports: ["3000:3000"]
+volumes:
+  pgdata:

@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+# Chromium solo si se va a scrapear (imagen más pesada). docker build --build-arg INSTALL_PLAYWRIGHT=1 .
+ARG INSTALL_PLAYWRIGHT=0
+RUN if [ "$INSTALL_PLAYWRIGHT" = "1" ]; then playwright install --with-deps chromium; fi
+COPY app ./app
+RUN useradd -m app && chown -R app /app
+USER app
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
