@@ -5,21 +5,28 @@ import { codificarEstado, decodificarEstado, type EstadoCompartido } from "@/lib
 import { resumenComparacion, type CreditoGuardado } from "@/lib/comparador";
 import { formatearMientrasEscribe, formatPct, parseCLP, parseTasa } from "@/lib/format";
 import { cargarMercado, MERCADO_VACIO, type EstadoMercado, type Mercado } from "@/lib/mercado";
-import { generarOpciones } from "@/lib/opciones";
+import { generarOpciones, MAX_TARJETAS } from "@/lib/opciones";
 import type { Credito, Modo } from "@/lib/tipos";
 import Ayuda from "./Ayuda";
-import { Campo, estiloCampo, estiloEtiqueta } from "./Campos";
+import { Campo, estiloCampo, estiloEtiqueta, Insignia } from "./Campos";
 import Comparador from "./Comparador";
 import Faq from "./Faq";
 import Resultados from "./Resultados";
 
 interface OfertaForm { nombre: string; tasa: string; gastos: string }
+interface TarjetaForm { nombre: string; saldo: string; pago: string; tasa: string; incluir: boolean }
 type Unidad = "mes" | "anio";
 const MAX_GUARDADOS = 3;
 const MAX_OFERTAS = 3;
+const TARJETA_VACIA: TarjetaForm = { nombre: "", saldo: "", pago: "", tasa: "", incluir: true };
 
 const boton = "min-h-12 rounded-lg border border-borde-input bg-superficie px-4 text-sm font-medium text-texto hover:bg-superficie-2";
 const tasaATexto = (t: number): string => String(+(t * 100).toFixed(4)).replace(".", ",");
+const dinero = (n: number | undefined): string => (n ? formatearMientrasEscribe(String(n)) : "");
+const tasaOpcional = (txt: string): number | undefined => { const v = parseTasa(txt); return Number.isNaN(v) ? undefined : v; };
+/** JSON con las llaves ordenadas: sirve para comparar dos estados sin que importe el orden en que se armaron. */
+const canon = (v: unknown): string => JSON.stringify(v, (_k, x) => (x && typeof x === "object" && !Array.isArray(x)
+  ? Object.fromEntries(Object.entries(x as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b))) : x));
 
 // El fragmento de la URL (#d=...) se lee con useSyncExternalStore: en el servidor es "" y en el navegador el valor real.
 const suscribirHash = (cb: () => void): (() => void) => { window.addEventListener("hashchange", cb); return () => window.removeEventListener("hashchange", cb); };
@@ -35,15 +42,16 @@ export default function Calculadora() {
 
 function FormularioCalculadora({ inicial }: { inicial: EstadoCompartido | null }) {
   const c0 = inicial?.credito;
-  const [saldo, setSaldo] = useState(c0 ? formatearMientrasEscribe(String(c0.saldo)) : "");
-  const [cuota, setCuota] = useState(c0 ? formatearMientrasEscribe(String(c0.cuota)) : "");
-  const [tasa, setTasa] = useState(c0 ? tasaATexto(c0.tasaMensual) : "");
+  const [saldo, setSaldo] = useState(dinero(c0?.saldo));
+  const [cuota, setCuota] = useState(dinero(c0?.cuota));
+  const [tasa, setTasa] = useState(c0?.tasaMensual !== undefined ? tasaATexto(c0.tasaMensual) : "");
+  const [mesesFaltan, setMesesFaltan] = useState(c0?.mesesRestantes ? String(c0.mesesRestantes) : "");
   const [unidad, setUnidad] = useState<Unidad>("mes");
   const [modo, setModo] = useState<Modo>(inicial?.modo ?? "intereses");
-  const [tarjetaSaldo, setTarjetaSaldo] = useState(c0?.tarjeta?.saldo ? formatearMientrasEscribe(String(c0.tarjeta.saldo)) : "");
-  const [tarjetaTasa, setTarjetaTasa] = useState(c0?.tarjeta ? tasaATexto(c0.tarjeta.tasaMensual) : "");
-  const [ofertas, setOfertas] = useState<OfertaForm[]>((c0?.ofertas ?? []).map((o) => ({ nombre: o.nombre, tasa: tasaATexto(o.tasaMensual), gastos: o.gastos ? formatearMientrasEscribe(String(o.gastos)) : "" })));
-  const [abono, setAbono] = useState(c0?.abonoUnico ? formatearMientrasEscribe(String(c0.abonoUnico)) : "");
+  const [tarjetas, setTarjetas] = useState<TarjetaForm[]>((c0?.tarjetas ?? []).map((t) => ({
+    nombre: t.nombre ?? "", saldo: dinero(t.saldo), pago: dinero(t.pagoMensual), tasa: t.tasaMensual !== undefined ? tasaATexto(t.tasaMensual) : "", incluir: t.incluir !== false })));
+  const [ofertas, setOfertas] = useState<OfertaForm[]>((c0?.ofertas ?? []).map((o) => ({ nombre: o.nombre, tasa: tasaATexto(o.tasaMensual), gastos: dinero(o.gastos) })));
+  const [abono, setAbono] = useState(dinero(c0?.abonoUnico));
   const [calculado, setCalculado] = useState<Credito | null>(c0 ?? null);
   const [mercado, setMercado] = useState<{ estado: EstadoMercado | "cargando"; mercado: Mercado }>({ estado: "cargando", mercado: MERCADO_VACIO });
   const [guardados, setGuardados] = useState<CreditoGuardado[]>([]);
@@ -57,25 +65,28 @@ function FormularioCalculadora({ inicial }: { inicial: EstadoCompartido | null }
     setMercado(await cargarMercado());
   }, []);
 
-  const tasaMensual = (): number => { const t = parseTasa(tasa); return unidad === "mes" || Number.isNaN(t) ? t : tasaMensualDesdeAnual(t); };
+  const tasaMensual = (): number | undefined => {
+    const t = tasaOpcional(tasa);
+    return t === undefined || unidad === "mes" ? t : tasaMensualDesdeAnual(t);
+  };
   const construir = (): Credito => {
-    const tTarjeta = parseTasa(tarjetaTasa);
+    const ofs = ofertas.filter((o) => parseTasa(o.tasa) > 0).map((o) => ({ nombre: o.nombre.trim(), tasaMensual: parseTasa(o.tasa), gastos: parseCLP(o.gastos) }));
+    const tjs = tarjetas.map((t) => ({ nombre: t.nombre.trim() || undefined, saldo: parseCLP(t.saldo) || undefined, pagoMensual: parseCLP(t.pago) || undefined,
+      tasaMensual: tasaOpcional(t.tasa), incluir: t.incluir }));
     return {
-      saldo: parseCLP(saldo), cuota: parseCLP(cuota), tasaMensual: tasaMensual(),
-      tarjeta: tTarjeta > 0 ? { saldo: parseCLP(tarjetaSaldo) || undefined, tasaMensual: tTarjeta } : undefined,
-      ofertas: ofertas.filter((o) => parseTasa(o.tasa) > 0).map((o) => ({ nombre: o.nombre.trim(), tasaMensual: parseTasa(o.tasa), gastos: parseCLP(o.gastos) })),
-      abonoUnico: parseCLP(abono) || undefined,
+      saldo: parseCLP(saldo), cuota: parseCLP(cuota), tasaMensual: tasaMensual(), mesesRestantes: parseCLP(mesesFaltan) || undefined,
+      tarjetas: tjs.length > 0 ? tjs : undefined, ofertas: ofs.length > 0 ? ofs : undefined, abonoUnico: parseCLP(abono) || undefined,
     };
   };
 
   const resultado = useMemo(() => (calculado ? generarOpciones(calculado, modo) : null), [calculado, modo]);
-  const desactualizado = calculado !== null && JSON.stringify(construir()) !== JSON.stringify(calculado);
+  const desactualizado = calculado !== null && canon(construir()) !== canon(calculado);
   const comparacion = useMemo(() => resumenComparacion(guardados), [guardados]);
 
   useEffect(() => { if (calculado) { zonaResultados.current?.focus({ preventScroll: true }); zonaResultados.current?.scrollIntoView?.({ block: "start" }); } }, [calculado]);
 
   const t = tasaMensual();
-  const pistaTasa = Number.isNaN(t) || t <= 0 ? undefined : unidad === "anio" ? `Equivale a ${formatPct(t)} al mes` : `Equivale a ${formatPct(cae(t), 1)} al año`;
+  const pistaTasa = t === undefined || t <= 0 ? undefined : unidad === "anio" ? `Equivale a ${formatPct(t)} al mes` : `Equivale a ${formatPct(cae(t), 1)} al año`;
 
   const copiarEnlace = async () => {
     if (!calculado) return;
@@ -86,6 +97,7 @@ function FormularioCalculadora({ inicial }: { inicial: EstadoCompartido | null }
     if (!calculado || guardados.length >= MAX_GUARDADOS) return;
     setGuardados([...guardados, { id: `${Date.now()}-${guardados.length}`, nombre: `Crédito ${guardados.length + 1}`, credito: calculado }]);
   };
+  const cambiarTarjeta = (i: number, cambio: Partial<TarjetaForm>) => setTarjetas(tarjetas.map((x, k) => (k === i ? { ...x, ...cambio } : x)));
 
   const acciones = (
     <div className="no-print space-y-2 rounded-xl border border-borde bg-superficie p-4">
@@ -102,28 +114,45 @@ function FormularioCalculadora({ inicial }: { inicial: EstadoCompartido | null }
 
   return (
     <div className="space-y-6">
+      <section aria-labelledby="necesitas" className="no-print rounded-xl border border-borde bg-superficie p-4 text-sm">
+        <h2 id="necesitas" className="mb-2 font-semibold">Qué necesitas</h2>
+        <p><Insignia id="n1" texto="Obligatorio" /> Cuánto debes y tu cuota mensual.</p>
+        <p className="mt-2"><Insignia id="n2" texto="Una de las dos" /> Tu tasa de interés o los meses que te faltan. Si escribes una, calculamos la otra.</p>
+        <p className="mt-2"><Insignia id="n3" texto="Opcional" /> Tus tarjetas de crédito (si las agregas, escribe cuánto debes en cada una y su pago mensual o su tasa; las que dejes marcadas se suman a la deuda a refinanciar), las ofertas que te dieron y un abono de una sola vez.</p>
+      </section>
+
       <form onSubmit={(e) => { e.preventDefault(); setCalculado(construir()); setCopiado(false); }} noValidate
         className="no-print space-y-4 rounded-2xl border border-borde bg-superficie p-4 shadow-sm sm:p-6">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Campo etiqueta="¿Cuánto debes hoy?" valor={saldo} onCambio={(v) => setSaldo(formatearMientrasEscribe(v))} placeholder="3.000.000"
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Campo etiqueta="¿Cuánto debes hoy?" req="Obligatorio" valor={saldo} onCambio={(v) => setSaldo(formatearMientrasEscribe(v))} placeholder="3.000.000"
             ayuda={<Ayuda etiqueta="¿Qué es lo que debo hoy?">Lo que todavía te falta pagar del crédito, sin contar los intereses futuros. Lo ves en tu app del banco como &quot;saldo insoluto&quot; o &quot;saldo de la deuda&quot;.</Ayuda>} />
-          <Campo etiqueta="Tu cuota mensual" valor={cuota} onCambio={(v) => setCuota(formatearMientrasEscribe(v))} placeholder="153.000"
+          <Campo etiqueta="Tu cuota mensual" req="Obligatorio" valor={cuota} onCambio={(v) => setCuota(formatearMientrasEscribe(v))} placeholder="153.000"
             ayuda={<Ayuda etiqueta="¿Qué es la cuota?">Lo que pagas cada mes por este crédito.</Ayuda>} />
-          <div>
-            <div className={estiloEtiqueta}>
-              <label htmlFor="tasa">Tasa de interés</label>
-              <Ayuda etiqueta="¿Qué es la tasa de interés?">Es lo que te cobra el banco cada mes por prestarte plata, como porcentaje de lo que debes. La encuentras en tu contrato o en la app del banco. Ejemplo: 2,1% al mes.</Ayuda>
+        </div>
+
+        <div className="rounded-lg border border-borde p-3">
+          <p className="mb-3 text-sm text-suave">Ahora escribe <b className="text-texto">una de estas dos</b> (con una basta; si pones las dos, usamos la tasa):</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <div className={estiloEtiqueta}>
+                <label htmlFor="tasa">Tasa de interés</label>
+                <Insignia id="tasa-req" texto="Una de las dos" />
+                <Ayuda etiqueta="¿Qué es la tasa de interés?">Es lo que te cobra el banco cada mes por prestarte plata, como porcentaje de lo que debes. La encuentras en tu contrato o en la app del banco. Ejemplo: 2,1% al mes.</Ayuda>
+              </div>
+              <input id="tasa" inputMode="decimal" enterKeyHint="next" autoComplete="off" placeholder={unidad === "mes" ? "3,0" : "42,6"} value={tasa}
+                onChange={(e) => setTasa(e.target.value)} className={estiloCampo} aria-describedby="tasa-req tasa-pista" />
+              <div role="radiogroup" aria-label="La tasa es" className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                {([["mes", "por mes"], ["anio", "por año (CAE)"]] as const).map(([v, texto]) => (
+                  <label key={v} className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border px-2 ${unidad === v ? "border-brand bg-brand-fondo font-semibold" : "border-borde-input"}`}>
+                    <input type="radio" name="unidad" value={v} checked={unidad === v} onChange={() => setUnidad(v)} className="sr-only" />{texto}
+                  </label>
+                ))}
+              </div>
+              <p id="tasa-pista" className="mt-1 text-xs text-suave">{pistaTasa ?? "Escribe solo el número, por ejemplo 3 o 2,5."}</p>
             </div>
-            <input id="tasa" inputMode="decimal" enterKeyHint="done" autoComplete="off" placeholder={unidad === "mes" ? "3,0" : "42,6"} value={tasa}
-              onChange={(e) => setTasa(e.target.value)} className={estiloCampo} aria-describedby="tasa-pista" />
-            <div role="radiogroup" aria-label="La tasa es" className="mt-2 grid grid-cols-2 gap-2 text-sm">
-              {([["mes", "por mes"], ["anio", "por año (CAE)"]] as const).map(([v, texto]) => (
-                <label key={v} className={`flex min-h-11 cursor-pointer items-center justify-center rounded-lg border px-2 ${unidad === v ? "border-brand bg-brand-fondo font-semibold" : "border-borde-input"}`}>
-                  <input type="radio" name="unidad" value={v} checked={unidad === v} onChange={() => setUnidad(v)} className="sr-only" />{texto}
-                </label>
-              ))}
-            </div>
-            <p id="tasa-pista" className="mt-1 text-xs text-suave">{pistaTasa ?? "Escribe solo el número, por ejemplo 3 o 2,5."}</p>
+            <Campo etiqueta="Meses que te faltan" req="Una de las dos" valor={mesesFaltan} onCambio={(v) => setMesesFaltan(v.replace(/\D/g, "").slice(0, 4))} placeholder="31"
+              pista="Cuántas cuotas te quedan por pagar. Si no sabes tu tasa, con esto la calculamos."
+              ayuda={<Ayuda etiqueta="¿Dónde veo los meses que me faltan?">En tu app del banco aparece como &quot;cuotas restantes&quot; o &quot;cuotas por pagar&quot;. También sale en la tabla de amortización de tu contrato.</Ayuda>} />
           </div>
         </div>
 
@@ -136,6 +165,30 @@ function FormularioCalculadora({ inicial }: { inicial: EstadoCompartido | null }
               </label>
             ))}
           </div>
+        </fieldset>
+
+        <fieldset className="space-y-3 rounded-lg border border-borde p-3">
+          <legend className="px-1 text-sm font-medium">Tarjetas de crédito (opcional)</legend>
+          <p className="text-xs text-suave">Si agregas una tarjeta, escribe cuánto debes en ella y su pago mensual o su tasa (con una de las dos basta).
+            Las tarjetas que dejes marcadas se suman a la deuda a refinanciar. Puedes agregar hasta {MAX_TARJETAS}.</p>
+          {tarjetas.map((tj, i) => (
+            <div key={i} className="space-y-3 rounded-lg bg-superficie-2 p-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Campo etiqueta="Nombre de la tarjeta" req="Opcional" valor={tj.nombre} modo="decimal" placeholder="Ej. Falabella" onCambio={(v) => cambiarTarjeta(i, { nombre: v.slice(0, 40) })} />
+                <Campo etiqueta="Total que debes en esta tarjeta" req="Obligatorio" valor={tj.saldo} placeholder="2.000.000" onCambio={(v) => cambiarTarjeta(i, { saldo: formatearMientrasEscribe(v) })} />
+                <Campo etiqueta="Pago mensual de esta tarjeta" req="Una de las dos" valor={tj.pago} placeholder="100.000" onCambio={(v) => cambiarTarjeta(i, { pago: formatearMientrasEscribe(v) })} />
+                <Campo etiqueta="Tasa mensual de esta tarjeta (%)" req="Una de las dos" valor={tj.tasa} modo="decimal" placeholder="3,5" onCambio={(v) => cambiarTarjeta(i, { tasa: v })} />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+                  <input type="checkbox" checked={tj.incluir} onChange={(e) => cambiarTarjeta(i, { incluir: e.target.checked })} className="h-5 w-5" />
+                  Incluir en el refinanciamiento
+                </label>
+                <button type="button" onClick={() => setTarjetas(tarjetas.filter((_, k) => k !== i))} className="min-h-11 px-3 text-sm text-suave underline">Quitar tarjeta</button>
+              </div>
+            </div>
+          ))}
+          {tarjetas.length < MAX_TARJETAS && <button type="button" onClick={() => setTarjetas([...tarjetas, { ...TARJETA_VACIA }])} className={boton}>+ Agregar tarjeta</button>}
         </fieldset>
 
         <details className="rounded-lg border border-borde p-3">
@@ -155,17 +208,9 @@ function FormularioCalculadora({ inicial }: { inicial: EstadoCompartido | null }
         </details>
 
         <details className="rounded-lg border border-borde p-3">
-          <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">¿Tienes tarjeta de crédito? Compárala (opcional)</summary>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Campo etiqueta="Saldo de la tarjeta" valor={tarjetaSaldo} onCambio={(v) => setTarjetaSaldo(formatearMientrasEscribe(v))} placeholder="2.000.000" />
-            <Campo etiqueta="Tasa mensual de la tarjeta (%)" valor={tarjetaTasa} modo="decimal" onCambio={setTarjetaTasa} placeholder="3,5" />
-          </div>
-        </details>
-
-        <details className="rounded-lg border border-borde p-3">
           <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium">¿Puedes abonar una parte de una sola vez? (opcional)</summary>
           <div className="mt-3 sm:max-w-xs">
-            <Campo etiqueta="Abono de una sola vez" valor={abono} onCambio={(v) => setAbono(formatearMientrasEscribe(v))} placeholder="500.000"
+            <Campo etiqueta="Abono de una sola vez" req="Opcional" valor={abono} onCambio={(v) => setAbono(formatearMientrasEscribe(v))} placeholder="500.000"
               pista="Te mostramos cuánto ahorrarías y cuánto antes terminarías." />
           </div>
         </details>

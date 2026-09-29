@@ -64,8 +64,13 @@ def crear_app() -> FastAPI:
     @app.exception_handler(RequestValidationError)
     async def _validacion(_: Request, exc: RequestValidationError):
         # Nunca reenviamos `input` (podría contener renta/deudas del usuario).
-        detalle = [{"campo": ".".join(str(x) for x in e["loc"] if x != "body"),
-                    "msg": _MENSAJES_422.get(e["type"], "Valor no válido.")} for e in exc.errors()]
+        def mensaje(e: dict) -> str:
+            # Los errores de nuestras reglas (ValueError de los modelos) ya vienen en español y sin datos del usuario.
+            if e["type"] == "value_error":
+                return str(e.get("ctx", {}).get("error", "Valor no válido."))
+            return _MENSAJES_422.get(e["type"], "Valor no válido.")
+
+        detalle = [{"campo": ".".join(str(x) for x in e["loc"] if x != "body"), "msg": mensaje(e)} for e in exc.errors()]
         return JSONResponse({"detail": detalle}, status_code=422)
 
     async def _resolver(req: SimulacionRequest) -> SimulacionRequest:

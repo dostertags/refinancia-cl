@@ -12,9 +12,10 @@ from app.config import (
     MESES_MAX_TARJETA, PLAZO_MAX_CONSUMO_MESES, TOPE_CUOTA_PCT_RENTA, TOPE_ENDEUDAMIENTO_VECES_RENTA,
 )
 from app.engine import finance, rules
+from app.engine.deudas import resolver_deudas
 from app.engine.optimizer import optimizar
 from app.schemas import (
-    AnalisisUnaDeuda, Deuda, Prestamo, Propuesta, ReglaVerificada, ResultadoSimulacion,
+    AnalisisUnaDeuda, Deuda, ParteRefinanciar, Prestamo, Propuesta, ReglaVerificada, ResultadoSimulacion,
     SimulacionRequest, SituacionActual, TarjetaAmortizacion,
 )
 
@@ -26,7 +27,7 @@ def _a_clp(deudas: List[Deuda], valor_uf) -> List[Deuda]:
         if d.moneda == "UF":
             d = d.model_copy(update={
                 "monto_actual": finance.uf_a_clp(d.monto_actual, valor_uf),
-                "cuota_actual": finance.uf_a_clp(d.cuota_actual, valor_uf),
+                "cuota_actual": finance.uf_a_clp(d.cuota_actual, valor_uf) if d.cuota_actual is not None else None,
                 "moneda": "CLP",
             })
         out.append(d)
@@ -93,6 +94,19 @@ def simular(req: SimulacionRequest) -> ResultadoSimulacion:
         ], **base)
 
     deudas = _a_clp(req.deudas, req.valor_uf)
+    # Coherencia solo cuando la persona dio los tres datos (cuota, tasa y meses); si falta alguno, se calcula.
+    completas = [d for d in deudas if d.tipo != "tarjeta" and d.tasa_mensual is not None and d.plazo_restante_meses is not None]
+    res = resolver_deudas(deudas)
+    if res.problemas:
+        return ResultadoSimulacion(
+            estado="DATOS_INCONSISTENTES", alertas=[], mensajes=res.problemas, supuestos=res.supuestos,
+            sugerencias=["Corrige los datos y vuelve a simular; con esos datos no es posible calcular un resultado confiable."], **base)
+    deudas = res.deudas
+    incluidas = [d for d in deudas if d.incluir]
+    excluidas = [d for d in deudas if not d.incluir]
+    parte = lambda d: ParteRefinanciar(institucion=d.institucion, tipo=d.tipo, monto=d.monto_actual)  # noqa: E731
+    base = {**base, "supuestos": res.supuestos, "total_a_refinanciar": sum(d.monto_actual for d in incluidas),
+            "partes_refinanciar": [parte(d) for d in incluidas], "excluidas": [parte(d) for d in excluidas]}
     actual = _situacion(deudas, renta)
     avisos = _avisos(req, deudas, renta, actual, ofertas)
     tarjetas = [
@@ -127,7 +141,7 @@ def simular(req: SimulacionRequest) -> ResultadoSimulacion:
         )  # TODO: verificar con abogado alcance real del tope y de la renegociación (Ley 20.720)
 
     # Coherencia de datos: sin esto el "ahorro" sería basura (hallazgo CRIT-005).
-    problemas = rules.chequear_coherencia(deudas)
+    problemas = rules.chequear_coherencia(completas)
     if problemas:
         return ResultadoSimulacion(
             estado="DATOS_INCONSISTENTES", situacion_actual=actual, tarjetas_amortizacion=tarjetas,
@@ -135,7 +149,12 @@ def simular(req: SimulacionRequest) -> ResultadoSimulacion:
                 "Corrige los datos y vuelve a simular; con datos inconsistentes no es posible calcular un ahorro confiable.",
                 "Los valores exactos aparecen en tu cartola o en el contrato de cada crédito."], **base)
 
-    opt = optimizar(renta, deudas, ofertas, objetivo=req.objetivo, relajar_r5=req.tarjetas_mas_de_24)
+    if not incluidas:
+        return ResultadoSimulacion(
+            estado="SIN_SOLUCION", situacion_actual=actual, tarjetas_amortizacion=tarjetas, alertas=avisos,
+            mensajes=["No hay deudas para refinanciar: marcaste todas fuera. Marca \"Incluir en el refinanciamiento\" en al menos una."], **base)
+
+    opt = optimizar(renta, incluidas, ofertas, objetivo=req.objetivo, relajar_r5=req.tarjetas_mas_de_24, fijas=excluidas)
     avisos = avisos + opt.alertas
 
     if opt.estado == "SIN_SOLUCION":

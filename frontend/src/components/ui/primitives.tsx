@@ -36,4 +36,9 @@ export const Label = ({ className, ...p }: React.LabelHTMLAttributes<HTMLLabelEl
   <label className={cn("mb-1 block text-sm font-medium text-slate-700", className)} {...p} />
 );
 
+/** Etiqueta que dice si un dato es obligatorio, una-de-dos u opcional (también la leen los lectores de pantalla). */
+export const Insignia = ({ id, texto }: { id: string; texto: string }) => (
+  <span id={id} className={cn("whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-semibold", texto.toLowerCase() === "opcional" ? "bg-slate-100 text-slate-700" : "bg-blue-100 text-blue-900")}>{texto}</span>
+);
+
 export const FieldError = ({ msg }: { msg?: string }) => (msg ? <p role="alert" className="mt-1 text-xs text-red-600">{msg}</p> : null);

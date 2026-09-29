@@ -57,6 +57,29 @@ export default function StepResultado({ res, onNext, onBack }: { res: Resultado;
       {res.sugerencias.length > 0 && <ul className="list-disc space-y-1 pl-6 text-sm">{res.sugerencias.map((t) => <li key={t}>{t}</li>)}</ul>}
       {res.analisis_una_deuda && <p className="rounded-md bg-blue-50 p-3 text-sm">{res.analisis_una_deuda.mensaje} Intereses evitables al prepagar: <b>{formatCLP(res.analisis_una_deuda.intereses_evitables_si_prepaga)}</b>.</p>}
 
+      {res.total_a_refinanciar > 0 && (
+        <section aria-labelledby="refi" className="rounded-xl border border-slate-200 bg-white p-4">
+          <h3 id="refi" className="font-semibold">Deuda a refinanciar</h3>
+          <p className="mt-1 text-3xl font-extrabold">{formatCLP(res.total_a_refinanciar)}</p>
+          <dl className="mt-2 space-y-1 text-sm">
+            {res.partes_refinanciar.map((x) => (
+              <div key={x.institucion} className="flex justify-between gap-3"><dt>{x.institucion}</dt><dd className="font-medium">{formatCLP(x.monto)}</dd></div>
+            ))}
+          </dl>
+          {res.excluidas.length > 0 && (
+            <p className="mt-2 text-sm text-slate-600">
+              Se queda como está (no entra al refinanciamiento): {res.excluidas.map((x) => `${x.institucion} (${formatCLP(x.monto)})`).join(", ")}. Igual se cuenta en lo que pagas cada mes.
+            </p>
+          )}
+        </section>
+      )}
+      {res.supuestos.length > 0 && (
+        <section aria-labelledby="supuestos" className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+          <h3 id="supuestos" className="mb-1 font-semibold">Lo que supusimos</h3>
+          {res.supuestos.map((t) => <p key={t} className="text-slate-600">{t}</p>)}
+        </section>
+      )}
+
       {a && p && (
         <>
           <div className="grid gap-3 sm:grid-cols-4">

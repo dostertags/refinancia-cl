@@ -6,6 +6,19 @@ registro, ni cookies de seguimiento.
 
 > Simulación educativa: no es una oferta de crédito ni asesoría financiera.
 
+## Qué datos necesita
+
+| Dato | Regla |
+|---|---|
+| Cuánto debes y tu cuota mensual | **Obligatorio** |
+| Tasa de interés **o** meses que te faltan | **Una de las dos** (si pones una, se calcula la otra) |
+| Tarjetas (hasta 3): total que debes | **Obligatorio** si agregas la tarjeta |
+| Tarjetas: pago mensual **o** tasa | **Una de las dos**; lo que falte se calcula suponiendo pago en 24 meses (norma CMF) y se avisa |
+| Casilla "Incluir en el refinanciamiento" | Marcada por defecto: las tarjetas marcadas se **suman al total a refinanciar** |
+| Ofertas que te dieron, abono de una sola vez, nombre de la tarjeta | Opcional |
+
+Lo que dejes fuera del refinanciamiento sigue igual y cuenta en lo que pagas cada mes.
+
 ## Qué calcula
 
 - **Pagar menos intereses:** bajar la tasa manteniendo tu cuota (terminas antes), misma cantidad de meses con menor cuota, o
@@ -35,7 +48,7 @@ Para tenerlo "en vivo", actualiza ese archivo con un proceso programado (por eje
 ```bash
 npm install
 npm run dev      # http://localhost:3000
-npm test         # 159 tests (matemática, formato, enlaces, contraste, interfaz)
+npm test         # 205 tests (matemática, formato, enlaces, contraste, interfaz)
 npm run lint
 ```
 

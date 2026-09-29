@@ -15,11 +15,13 @@ export interface Deuda {
   institucion: string;
   tipo: TipoDeuda;
   monto_actual: number;
-  tasa_mensual: number;
-  cuota_actual: number;
-  plazo_restante_meses: number;
+  // Crédito: cuota + (tasa o meses). Tarjeta: (pago mensual o tasa). El resto se calcula en el servidor.
+  tasa_mensual?: number;
+  cuota_actual?: number;
+  plazo_restante_meses?: number;
   moneda: "CLP" | "UF";
   casa_comercial: boolean;
+  incluir: boolean; // "Incluir en el refinanciamiento" (por defecto sí)
 }
 
 export interface Prestamo {
@@ -52,6 +54,10 @@ export interface Resultado {
   reglas: { regla: string; titulo: string; cumple: boolean; detalle: string }[];
   alertas: string[]; sugerencias: string[]; mensajes: string[];
   renta_minima_sugerida: number | null;
+  supuestos: string[];
+  total_a_refinanciar: number;
+  partes_refinanciar: { institucion: string; tipo: TipoDeuda; monto: number }[];
+  excluidas: { institucion: string; tipo: TipoDeuda; monto: number }[];
   fuente_ofertas: "sernac" | "ilustrativas" | "usuario" | "ninguna";
   aviso_ofertas: string;
   disclaimer: string; aviso_retracto: string; enlaces_oficiales: Record<string, string>;

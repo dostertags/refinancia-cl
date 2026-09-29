@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app import config
 
@@ -29,12 +29,30 @@ class Deuda(BaseModel):
     institucion: str
     tipo: TipoDeuda = "consumo"
     monto_actual: float = Field(ge=0)  # 0 = deuda ya pagada: se ignora (caso borde)
-    tasa_mensual: float = Field(ge=0, lt=1)
-    cuota_actual: float = Field(ge=0)
-    plazo_restante_meses: int = Field(gt=0, le=600)
+    # Reglas: crédito/línea = cuota + (tasa o meses restantes, al menos uno). Tarjeta = (pago mensual o tasa, al menos uno).
+    tasa_mensual: Optional[float] = Field(default=None, ge=0, lt=1)
+    cuota_actual: Optional[float] = Field(default=None, ge=0)
+    plazo_restante_meses: Optional[int] = Field(default=None, gt=0, le=600)
     moneda: Literal["CLP", "UF"] = "CLP"
     # Tarjetas de casa comercial (Falabella, Ripley, etc.) también caen bajo NCG 537.
     casa_comercial: bool = False
+    # Casilla "Incluir en el refinanciamiento": lo excluido cuenta en la situación de hoy y en la cuota nueva.
+    incluir: bool = True
+
+    @model_validator(mode="after")
+    def _datos_minimos(self):
+        if self.monto_actual == 0:  # deuda ya pagada: se ignora más adelante
+            return self
+        con_cuota = self.cuota_actual is not None and self.cuota_actual > 0
+        if self.tipo == "tarjeta":
+            if not con_cuota and self.tasa_mensual is None:
+                raise ValueError(f"La tarjeta {self.institucion} necesita su pago mensual o su tasa (con una de las dos basta).")
+        else:
+            if not con_cuota:
+                raise ValueError(f"Falta la cuota mensual de {self.institucion}.")
+            if self.tasa_mensual is None and self.plazo_restante_meses is None:
+                raise ValueError(f"Para {self.institucion} necesito la tasa de interés o los meses que te faltan (con una de las dos basta).")
+        return self
 
 
 class Oferta(BaseModel):
@@ -146,6 +164,12 @@ class Propuesta(BaseModel):
     pasos_cascada: List[str]
 
 
+class ParteRefinanciar(BaseModel):
+    institucion: str
+    tipo: TipoDeuda
+    monto: float
+
+
 class ResultadoSimulacion(BaseModel):
     estado: Literal["OK", "SOBREENDEUDADO", "SIN_DEUDAS", "SIN_SOLUCION", "NO_CONVIENE", "DATOS_INCONSISTENTES"]
     fecha_calculo: str
@@ -160,6 +184,10 @@ class ResultadoSimulacion(BaseModel):
     sugerencias: List[str] = []
     mensajes: List[str] = []
     renta_minima_sugerida: Optional[int] = None
+    supuestos: List[str] = []  # datos que se calcularon o supusieron por falta de información
+    total_a_refinanciar: float = 0
+    partes_refinanciar: List[ParteRefinanciar] = []
+    excluidas: List[ParteRefinanciar] = []
     fuente_ofertas: Literal["sernac", "ilustrativas", "usuario", "ninguna"] = "ninguna"
     aviso_ofertas: str = ""
     disclaimer: str

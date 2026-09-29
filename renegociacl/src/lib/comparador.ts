@@ -4,7 +4,7 @@ import type { Credito } from "./tipos";
 
 export interface CreditoGuardado { id: string; nombre: string; credito: Credito }
 export interface ResumenCredito {
-  id: string; nombre: string; saldo: number; cuota: number; tasaMensual: number;
+  id: string; nombre: string; saldo: number; cuota: number; tasaMensual?: number;
   meses?: number; totalPagar?: number; intereses?: number; mejorAhorro?: number; mejorTitulo?: string;
   prioridad: boolean; error?: string;
 }
@@ -15,7 +15,7 @@ export function resumenComparacion(lista: CreditoGuardado[]): ResumenCredito[] {
     const r = generarOpciones(credito, "intereses");
     if (!r.ok) return { ...base, error: r.error };
     const mejor = r.opciones[0];
-    return { ...base, meses: r.actual.meses, totalPagar: r.actual.totalPagar, intereses: r.actual.intereses,
+    return { ...base, tasaMensual: r.comparacion[0].tasaMensual, saldo: r.refinanciar.partes.reduce((a, x) => a + x.saldo, 0) + r.refinanciar.excluidas.reduce((a, x) => a + x.saldo, 0), meses: r.actual.meses, totalPagar: r.actual.totalPagar, intereses: r.actual.intereses,
       mejorAhorro: mejor?.ahorroTotal ?? 0, mejorTitulo: mejor?.titulo };
   });
   let idx = -1, max = 0;

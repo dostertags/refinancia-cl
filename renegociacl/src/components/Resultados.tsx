@@ -9,7 +9,7 @@ type Ok = Extract<Resultado, { ok: true }>;
 
 const corta = (o: OpcionRenegociacion, k: number): string => {
   const base = { tasa: `Tasa ${formatPct(o.tasaMensual)}`, cuota: `Tasa ${formatPct(o.tasaMensual)}, mismo plazo`, plazo: `Tasa ${formatPct(o.tasaMensual)}, ${o.nuevosMeses} m`,
-    abono: "Subir la cuota", abonoUnico: "Abono único", tarjeta: "Tarjeta al crédito" }[o.tipo];
+    abono: "Subir la cuota", abonoUnico: "Abono único" }[o.tipo];
   return `${k + 1}. ${base}`;
 };
 
@@ -38,12 +38,10 @@ export interface PropsResultados {
 
 function ResultadosBase({ r, modo, estadoMercado, mercado, onReintentar, acciones }: PropsResultados) {
   const mejor = r.opciones[0];
-  // La tarjeta es OTRA deuda (se compara contra dejarla a 24 meses): no se mezcla con los totales y plazos del crédito.
-  const delCredito = r.opciones.filter((o) => o.tipo !== "tarjeta");
   const filasTotal: FilaBarra[] = [{ etiqueta: "Hoy", valor: r.actual.totalPagar, texto: formatCLP(r.actual.totalPagar), base: true },
-    ...delCredito.map((o) => ({ etiqueta: corta(o, r.opciones.indexOf(o)), valor: o.totalPagar, texto: formatCLP(o.totalPagar), destacada: o.id === mejor?.id }))];
+    ...r.opciones.map((o, k) => ({ etiqueta: corta(o, k), valor: o.totalPagar, texto: formatCLP(o.totalPagar), destacada: k === 0 }))];
   const filasTiempo: FilaBarra[] = [{ etiqueta: "Hoy", valor: r.actual.meses, texto: `${r.actual.meses} meses`, base: true },
-    ...delCredito.map((o) => ({ etiqueta: corta(o, r.opciones.indexOf(o)), valor: o.nuevosMeses, texto: `${o.nuevosMeses} ${o.nuevosMeses === 1 ? "mes" : "meses"}`, destacada: o.id === mejor?.id }))];
+    ...r.opciones.map((o, k) => ({ etiqueta: corta(o, k), valor: o.nuevosMeses, texto: `${o.nuevosMeses} ${o.nuevosMeses === 1 ? "mes" : "meses"}`, destacada: k === 0 }))];
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-borde bg-superficie p-4">
@@ -52,7 +50,30 @@ function ResultadosBase({ r, modo, estadoMercado, mercado, onReintentar, accione
           Te faltan <b>{r.actual.meses} meses</b> y vas a pagar <b>{formatCLP(r.actual.totalPagar)}</b> en total,
           de los cuales <b>{formatCLP(r.actual.intereses)}</b> son solo intereses. Tu tasa equivale a un <b>{formatPct(r.actual.caeAnual, 1)}</b> al año.
         </p>
+        <p className="mt-1">Hoy pagas <b>{formatCLP(r.actual.cuotaTotal)}</b> al mes entre todas tus deudas.</p>
       </div>
+
+      <section aria-labelledby="refi" className="rounded-xl border border-borde bg-superficie p-4">
+        <h2 id="refi" className="font-semibold">Deuda a refinanciar</h2>
+        <p className="mt-1 text-3xl font-extrabold">{formatCLP(r.refinanciar.total)}</p>
+        <dl className="mt-2 space-y-1 text-sm">
+          {r.refinanciar.partes.map((p) => (
+            <div key={p.nombre} className="flex justify-between gap-3"><dt>{p.nombre}</dt><dd className="font-medium">{formatCLP(p.saldo)}</dd></div>
+          ))}
+        </dl>
+        {r.refinanciar.excluidas.length > 0 && (
+          <p className="mt-2 text-sm text-suave">
+            Se queda como está (no entra al refinanciamiento): {r.refinanciar.excluidas.map((x) => `${x.nombre} (${formatCLP(x.saldo)})`).join(", ")}. Igual se cuenta en lo que pagas cada mes.
+          </p>
+        )}
+      </section>
+
+      {r.supuestos.length > 0 && (
+        <section aria-labelledby="supuestos" className="rounded-xl border border-borde bg-superficie p-4 text-sm">
+          <h2 id="supuestos" className="mb-1 font-semibold">Lo que supusimos</h2>
+          {r.supuestos.map((t) => <p key={t} className="text-suave">{t}</p>)}
+        </section>
+      )}
 
       {r.nota && <p className="rounded-xl border border-borde bg-superficie p-4">{r.nota}</p>}
       {r.avisos.map((a) => <p key={a} className="rounded-xl border border-borde bg-aviso-fondo p-3 text-sm text-aviso-texto">{a}</p>)}
@@ -78,7 +99,7 @@ function ResultadosBase({ r, modo, estadoMercado, mercado, onReintentar, accione
         </div>
       )}
 
-      {delCredito.length > 0 && (
+      {r.opciones.length > 0 && (
         <div className="grid gap-4 lg:grid-cols-2">
           <Barras id="g-total" titulo="Cuánto pagarías en total" ayuda="Suma de todas las cuotas y gastos. Más corta = mejor." filas={filasTotal} />
           <Barras id="g-tiempo" titulo="Cuándo terminas de pagar" ayuda="Meses que faltan hasta la última cuota." filas={filasTiempo} />

@@ -4,7 +4,7 @@ import { resumenComparacion } from "@/lib/comparador";
 import { escalar } from "@/lib/graficos";
 
 const estado: EstadoCompartido = {
-  credito: { saldo: 3_000_000, cuota: 153_000, tasaMensual: 0.03, tarjeta: { saldo: 2_000_000, tasaMensual: 0.035 },
+  credito: { saldo: 3_000_000, cuota: 153_000, tasaMensual: 0.03, mesesRestantes: 30, tarjetas: [{ nombre: "Falabella", saldo: 2_000_000, pagoMensual: 100_000, incluir: false }, { saldo: 500_000, tasaMensual: 0.035 }],
     ofertas: [{ nombre: "Banco Ñandú", tasaMensual: 0.012, gastos: 30_000 }], abonoUnico: 200_000 },
   modo: "cuota",
 };
@@ -19,6 +19,21 @@ describe("enlace para compartir", () => {
     expect(decodificarEstado(malo)).toBeNull();
     const raro = btoa(JSON.stringify({ credito: { saldo: "3000000", cuota: 1, tasaMensual: 0.02 }, modo: "cuota" })).replace(/=+$/, "");
     expect(decodificarEstado(raro)).toBeNull();
+  });
+  it("exige al menos tasa o meses restantes", () => {
+    const sin = codificarEstado({ credito: { saldo: 3_000_000, cuota: 153_000 }, modo: "cuota" });
+    expect(decodificarEstado(sin)).toBeNull();
+    const soloMeses = codificarEstado({ credito: { saldo: 3_000_000, cuota: 153_000, mesesRestantes: 31 }, modo: "cuota" });
+    expect(decodificarEstado(soloMeses)?.credito.mesesRestantes).toBe(31);
+  });
+  it("acepta hasta 3 tarjetas y rechaza 4 o campos mal tipados", () => {
+    const t = { saldo: 1, pagoMensual: 1 };
+    const ok = codificarEstado({ credito: { saldo: 1000, cuota: 100, tasaMensual: 0.02, tarjetas: [t, t, t] }, modo: "cuota" });
+    expect(decodificarEstado(ok)?.credito.tarjetas).toHaveLength(3);
+    const cuatro = codificarEstado({ credito: { saldo: 1000, cuota: 100, tasaMensual: 0.02, tarjetas: [t, t, t, t] }, modo: "cuota" });
+    expect(decodificarEstado(cuatro)).toBeNull();
+    const malo = codificarEstado({ credito: { saldo: 1000, cuota: 100, tasaMensual: 0.02, tarjetas: [{ saldo: 1, incluir: "si" as never }] }, modo: "cuota" });
+    expect(decodificarEstado(malo)).toBeNull();
   });
   it("rechaza modos desconocidos y payloads gigantes", () => {
     expect(decodificarEstado(codificarEstado({ ...estado, modo: "hack" as never }))).toBeNull();

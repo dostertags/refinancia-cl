@@ -113,3 +113,39 @@ export function caeDesdePagos(saldo: number, gastos: number, pagos: number[]): n
 export function caeConGastos(saldo: number, gastos: number, cuota: number, n: number): number {
   return caeDesdePagos(saldo, gastos, Array<number>(n).fill(cuota)) ?? cae(0);
 }
+
+/**
+ * Tasa mensual implícita: la que hace que pagar `cuota` durante `meses` cancele exactamente `saldo`.
+ * null si la cuota no alcanza para pagar el saldo en esos meses, o si implicaría más de 20% mensual.
+ */
+export function tasaDesdeMeses(saldo: number, cuota: number, meses: number): number | null {
+  if (!(saldo > 0) || !(cuota > 0) || !(meses > 0)) return null;
+  const total = cuota * meses;
+  const holgura = 0.5 * meses; // la cuota viene en pesos enteros: hasta $0,5 de diferencia por cuota es redondeo
+  if (total < saldo - holgura) return null;
+  if (total <= saldo + holgura) return 0;
+  const vp = (i: number): number => (cuota * (1 - (1 + i) ** -meses)) / i;
+  let lo = 1e-12, hi = 0.2;
+  if (vp(hi) > saldo) return null;
+  for (let k = 0; k < 200; k++) {
+    const mid = (lo + hi) / 2;
+    if (vp(mid) > saldo) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/** Suma varias tablas de amortización mes a mes (una deuda que ya terminó aporta 0). */
+export function sumarTablas(tablas: FilaAmortizacion[][]): FilaAmortizacion[] {
+  const largo = Math.max(0, ...tablas.map((t) => t.length));
+  const filas: FilaAmortizacion[] = [];
+  for (let k = 0; k < largo; k++) {
+    const f: FilaAmortizacion = { mes: k + 1, pago: 0, interes: 0, capital: 0, abono: 0, saldo: 0 };
+    for (const t of tablas) {
+      const r = t[k];
+      if (!r) continue;
+      f.pago += r.pago; f.interes += r.interes; f.capital += r.capital; f.abono += r.abono; f.saldo += r.saldo;
+    }
+    filas.push(f);
+  }
+  return filas;
+}

@@ -1,6 +1,6 @@
 // Enlace para compartir: el estado viaja en el FRAGMENTO de la URL (#d=...), que el navegador nunca envía a ningún servidor.
 // Aun así, quien reciba el enlace verá los datos: la interfaz lo advierte antes de copiarlo.
-import type { Credito, Modo } from "./tipos";
+import type { Credito, Modo, TarjetaEntrada } from "./tipos";
 
 export interface EstadoCompartido { credito: Credito; modo: Modo }
 const MAX_LARGO = 2000;
@@ -32,14 +32,27 @@ export function decodificarEstado(fragmento: string): EstadoCompartido | null {
   const { credito: c, modo } = d as { credito?: Record<string, unknown>; modo?: unknown };
   if (modo !== "intereses" && modo !== "cuota") return null;
   if (!c || typeof c !== "object") return null;
-  if (!num(c.saldo, 0, 1e12, false) || !num(c.cuota, 0, 1e12, false) || !num(c.tasaMensual, 0, 0.2)) return null;
-  const credito: Credito = { saldo: c.saldo, cuota: c.cuota, tasaMensual: c.tasaMensual };
+  if (!num(c.saldo, 0, 1e12, false) || !num(c.cuota, 0, 1e12, false)) return null;
+  const credito: Credito = { saldo: c.saldo, cuota: c.cuota };
+  // Regla: al menos uno entre tasa y meses restantes.
+  if (c.tasaMensual !== undefined) { if (!num(c.tasaMensual, 0, 0.2)) return null; credito.tasaMensual = c.tasaMensual; }
+  if (c.mesesRestantes !== undefined) { if (!num(c.mesesRestantes, 0, 1200, false)) return null; credito.mesesRestantes = c.mesesRestantes; }
+  if (credito.tasaMensual === undefined && credito.mesesRestantes === undefined) return null;
   if (c.abonoUnico !== undefined) { if (!num(c.abonoUnico, 0, 1e12)) return null; credito.abonoUnico = c.abonoUnico; }
-  if (c.tarjeta !== undefined) {
-    const t = c.tarjeta as Record<string, unknown> | null;
-    if (!t || typeof t !== "object" || !num(t.tasaMensual, 0, 0.2, false)) return null;
-    if (t.saldo !== undefined && !num(t.saldo, 0, 1e12)) return null;
-    credito.tarjeta = { tasaMensual: t.tasaMensual, ...(t.saldo !== undefined ? { saldo: t.saldo as number } : {}) };
+  if (c.tarjetas !== undefined) {
+    if (!Array.isArray(c.tarjetas) || c.tarjetas.length > 3) return null;
+    const tarjetas: TarjetaEntrada[] = [];
+    for (const t of c.tarjetas as Record<string, unknown>[]) {
+      if (!t || typeof t !== "object") return null;
+      const out: TarjetaEntrada = {};
+      if (t.nombre !== undefined) { if (typeof t.nombre !== "string" || t.nombre.length > 40) return null; out.nombre = t.nombre; }
+      if (t.saldo !== undefined) { if (!num(t.saldo, 0, 1e12)) return null; out.saldo = t.saldo; }
+      if (t.pagoMensual !== undefined) { if (!num(t.pagoMensual, 0, 1e12, false)) return null; out.pagoMensual = t.pagoMensual; }
+      if (t.tasaMensual !== undefined) { if (!num(t.tasaMensual, 0, 0.2)) return null; out.tasaMensual = t.tasaMensual; }
+      if (t.incluir !== undefined) { if (typeof t.incluir !== "boolean") return null; out.incluir = t.incluir; }
+      tarjetas.push(out);
+    }
+    credito.tarjetas = tarjetas;
   }
   if (c.ofertas !== undefined) {
     if (!Array.isArray(c.ofertas) || c.ofertas.length > 3) return null;

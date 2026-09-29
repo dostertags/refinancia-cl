@@ -23,7 +23,7 @@ export default function Comparador({ filas, onQuitar, onNombre }: { filas: Resum
               </th>
               {f.error ? <td colSpan={5} className="text-error-texto">{f.error}</td> : (
                 <>
-                  <td>{formatCLP(f.saldo)}</td><td>{formatPct(f.tasaMensual)}</td><td>{f.meses} meses</td>
+                  <td>{formatCLP(f.saldo)}</td><td>{f.tasaMensual === undefined ? "-" : formatPct(f.tasaMensual)}</td><td>{f.meses} meses</td>
                   <td>{formatCLP(f.intereses ?? 0)}</td><td className="font-semibold text-ok">{formatCLP(f.mejorAhorro ?? 0)}</td>
                 </>
               )}

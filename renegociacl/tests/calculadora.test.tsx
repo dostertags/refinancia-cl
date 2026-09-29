@@ -149,17 +149,6 @@ describe("Ofertas, tarjeta y abono", () => {
     await calcular();
     expect(await screen.findByText(/no mejora tu tasa actual/i)).toBeInTheDocument();
   });
-  it("la tarjeta se compara aunque cierres el bloque después de llenarlo", async () => {
-    render(<Calculadora />);
-    await llenar();
-    const resumen = screen.getByText(/tienes tarjeta de crédito/i);
-    await userEvent.click(resumen);
-    await userEvent.type(screen.getByLabelText(/saldo de la tarjeta/i), "2000000");
-    await userEvent.type(screen.getByLabelText(/tasa mensual de la tarjeta/i), "3,5");
-    await userEvent.click(resumen);
-    await calcular();
-    expect(within(await screen.findByRole("table", { name: /comparación de tasas/i })).getByText("Tu tarjeta")).toBeInTheDocument();
-  });
   it("un abono único opcional aparece como opción", async () => {
     render(<Calculadora />);
     await llenar();
@@ -192,7 +181,7 @@ describe("Confianza: fuentes y estado de las tasas", () => {
     render(<Calculadora />);
     await llenar();
     await calcular();
-    expect(await screen.findByText(/te faltan/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Te faltan/)).toBeInTheDocument();
     mockRates(CON_TASAS);
     await userEvent.click(await screen.findByRole("button", { name: /reintentar/i }));
     expect(await screen.findByText(/Banco Uno/)).toBeInTheDocument();
@@ -276,18 +265,137 @@ describe("Tema oscuro", () => {
   });
 });
 
-describe("Gráficos comparan solo lo comparable", () => {
-  it("la opción de tarjeta (otra deuda) no aparece en los gráficos de total ni de plazo", async () => {
+async function agregarTarjeta(nombre: string, saldo: string, opts: { pago?: string; tasa?: string } = {}, indice = 0) {
+  await userEvent.click(screen.getByRole("button", { name: /agregar tarjeta/i }));
+  const nombres = screen.getAllByLabelText(/nombre de la tarjeta/i), saldos = screen.getAllByLabelText(/total que debes en esta tarjeta/i);
+  const pagos = screen.getAllByLabelText(/pago mensual de esta tarjeta/i), tasas = screen.getAllByLabelText(/tasa mensual de esta tarjeta/i);
+  if (nombre) await userEvent.type(nombres[indice], nombre);
+  await userEvent.type(saldos[indice], saldo);
+  if (opts.pago) await userEvent.type(pagos[indice], opts.pago);
+  if (opts.tasa) await userEvent.type(tasas[indice], opts.tasa);
+}
+
+describe("Reglas claras: obligatorio y opcional", () => {
+  it("un cuadro explica qué se necesita y qué es opcional, antes de llenar nada", () => {
+    render(<Calculadora />);
+    const r = screen.getByRole("region", { name: /qué necesitas/i });
+    expect(r).toHaveTextContent(/obligatorio/i);
+    expect(r).toHaveTextContent(/cuánto debes y tu cuota/i);
+    expect(r).toHaveTextContent(/tasa de interés o los meses que te faltan/i);
+    expect(r).toHaveTextContent(/opcional/i);
+    expect(r).toHaveTextContent(/tarjetas/i);
+  });
+  it("cada campo dice si es obligatorio, una-de-dos u opcional", () => {
+    render(<Calculadora />);
+    expect(screen.getByLabelText(/cuánto debes/i)).toHaveAccessibleDescription(/obligatorio/i);
+    expect(screen.getByLabelText(/tu cuota mensual/i)).toHaveAccessibleDescription(/obligatorio/i);
+    expect(screen.getByLabelText(/^tasa de interés/i)).toHaveAccessibleDescription(/una de las dos/i);
+    expect(screen.getByLabelText(/meses que te faltan/i)).toHaveAccessibleDescription(/una de las dos/i);
+  });
+  it("las secciones opcionales están marcadas como opcionales", () => {
+    render(<Calculadora />);
+    expect(screen.getByText(/tarjetas de crédito \(opcional\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/te ofrecieron una tasa mejor\? \(opcional\)/i)).toBeInTheDocument();
+  });
+});
+
+describe("Tasa opcional: alcanza con los meses que te faltan", () => {
+  it("saldo + cuota + meses (sin tasa) calcula y explica que la tasa se calculó", async () => {
+    render(<Calculadora />);
+    await userEvent.type(screen.getByLabelText(/cuánto debes/i), "3000000");
+    await userEvent.type(screen.getByLabelText(/tu cuota mensual/i), "153000");
+    await userEvent.type(screen.getByLabelText(/meses que te faltan/i), "31");
+    await calcular();
+    expect(await screen.findByText(/Te faltan/)).toBeInTheDocument();
+    expect(screen.getByText(/calculamos tu tasa a partir de los meses que te faltan/i)).toBeInTheDocument();
+  });
+  it("sin tasa ni meses explica que falta una de las dos", async () => {
+    render(<Calculadora />);
+    await userEvent.type(screen.getByLabelText(/cuánto debes/i), "3000000");
+    await userEvent.type(screen.getByLabelText(/tu cuota mensual/i), "153000");
+    await calcular();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/tasa de interés o los meses que te faltan/i);
+  });
+});
+
+describe("Tarjetas: se suman al total a refinanciar", () => {
+  it("permite agregar hasta 3 tarjetas y oculta el botón al llegar a 3", async () => {
+    render(<Calculadora />);
+    for (let k = 0; k < 3; k++) await userEvent.click(screen.getByRole("button", { name: /agregar tarjeta/i }));
+    expect(screen.getAllByLabelText(/total que debes en esta tarjeta/i)).toHaveLength(3);
+    expect(screen.queryByRole("button", { name: /agregar tarjeta/i })).not.toBeInTheDocument();
+  });
+  it("cada tarjeta trae la casilla 'Incluir en el refinanciamiento' marcada por defecto", async () => {
+    render(<Calculadora />);
+    await userEvent.click(screen.getByRole("button", { name: /agregar tarjeta/i }));
+    expect(screen.getByLabelText(/incluir en el refinanciamiento/i)).toBeChecked();
+  });
+  it("muestra el total a refinanciar con el desglose (crédito + tarjeta)", async () => {
     render(<Calculadora />);
     await llenar();
-    await userEvent.click(screen.getByText(/tienes tarjeta de crédito/i));
-    await userEvent.type(screen.getByLabelText(/saldo de la tarjeta/i), "2000000");
-    await userEvent.type(screen.getByLabelText(/tasa mensual de la tarjeta/i), "3,5");
+    await agregarTarjeta("Falabella", "2000000", { pago: "100000", tasa: "3,5" });
+    await calcular();
+    const r = await screen.findByRole("region", { name: /deuda a refinanciar/i });
+    expect(r).toHaveTextContent("$5.000.000");
+    expect(r).toHaveTextContent(/Tu crédito/);
+    expect(r).toHaveTextContent(/Falabella/);
+  });
+  it("hoy pagas incluye la tarjeta", async () => {
+    render(<Calculadora />);
+    await llenar();
+    await agregarTarjeta("Falabella", "2000000", { pago: "100000", tasa: "3,5" });
+    await calcular();
+    expect(await screen.findByText(/hoy pagas/i)).toHaveTextContent("$253.000");
+  });
+  it("al desmarcar la casilla, la tarjeta queda fuera del total pero sigue en lo que pagas", async () => {
+    render(<Calculadora />);
+    await llenar();
+    await agregarTarjeta("Falabella", "2000000", { pago: "100000", tasa: "3,5" });
+    await userEvent.click(screen.getByLabelText(/incluir en el refinanciamiento/i));
+    await calcular();
+    const r = await screen.findByRole("region", { name: /deuda a refinanciar/i });
+    expect(r).toHaveTextContent("$3.000.000");
+    expect(r).toHaveTextContent(/se queda como está/i);
+    expect(screen.getByText(/hoy pagas/i)).toHaveTextContent("$253.000");
+  });
+  it("solo saldo: no inventa y explica que falta el pago o la tasa", async () => {
+    render(<Calculadora />);
+    await llenar();
+    await agregarTarjeta("Ripley", "2000000");
+    await calcular();
+    expect(await screen.findByText(/Ripley.*necesito su pago mensual o su tasa/i)).toBeInTheDocument();
+  });
+  it("con pago mensual y sin tasa, dice qué se supuso", async () => {
+    render(<Calculadora />);
+    await llenar();
+    await agregarTarjeta("Ripley", "2000000", { pago: "100000" });
+    await calcular();
+    const s = await screen.findByRole("region", { name: /lo que supusimos/i });
+    expect(s).toHaveTextContent(/24 meses/);
+  });
+  it("una tarjeta con datos pero sin saldo avisa que falta el total", async () => {
+    render(<Calculadora />);
+    await llenar();
+    await userEvent.click(screen.getByRole("button", { name: /agregar tarjeta/i }));
+    await userEvent.type(screen.getAllByLabelText(/pago mensual de esta tarjeta/i)[0], "100000");
+    await calcular();
+    expect(await screen.findByText(/necesito el total que debes/i)).toBeInTheDocument();
+  });
+  it("las tarjetas viajan en el enlace compartido y se recuperan", async () => {
+    window.location.hash = "#d=" + codificarEstado({ credito: { saldo: 3_000_000, cuota: 153_000, mesesRestantes: 31,
+      tarjetas: [{ nombre: "Falabella", saldo: 2_000_000, pagoMensual: 100_000, incluir: false }] }, modo: "intereses" });
+    render(<Calculadora />);
+    expect(await screen.findByText(/Te faltan/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/nombre de la tarjeta/i)).toHaveValue("Falabella");
+    expect(screen.getByLabelText(/incluir en el refinanciamiento/i)).not.toBeChecked();
+  });
+  it("los gráficos comparan el total de TODAS las deudas contra cada opción", async () => {
+    render(<Calculadora />);
+    await llenar();
+    await agregarTarjeta("Falabella", "2000000", { pago: "100000", tasa: "3,5" });
     await calcular();
     const total = await screen.findByRole("region", { name: /cuánto pagarías en total/i });
-    const tiempo = screen.getByRole("region", { name: /cuándo terminas de pagar/i });
-    expect(within(total).queryByText(/tarjeta/i)).not.toBeInTheDocument();
-    expect(within(tiempo).queryByText(/tarjeta/i)).not.toBeInTheDocument();
-    expect(screen.getAllByText(/Pasa tu tarjeta/).length).toBeGreaterThan(0); // sigue en la lista de opciones
+    expect(within(total).getByText(/^Hoy$/)).toBeInTheDocument();
+    expect(total).toHaveTextContent(/\$[\d.]{9}/);
   });
 });

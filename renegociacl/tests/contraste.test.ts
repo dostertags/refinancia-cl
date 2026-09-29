@@ -23,6 +23,7 @@ const PARES: [string, string, number, string][] = [
   ["texto", "brand-fondo", 4.5, "mejor opción resaltada"], ["aviso-texto", "aviso-fondo", 4.5, "aviso"],
   ["error-texto", "error-fondo", 4.5, "error"], ["borde-input", "superficie", 3, "borde de campos"],
   ["brand", "fondo", 3, "acento sobre fondo (gráficos)"],
+  ["brand", "brand-fondo", 4.5, "insignia Obligatorio"], ["suave", "superficie-2", 4.5, "insignia Opcional"],
 ];
 
 describe.each([["light", ":root"], ["dark", "\\.dark"]])("tema %s", (_, bloque) => {

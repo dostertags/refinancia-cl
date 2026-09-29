@@ -177,13 +177,6 @@ describe("ofertas y avisos honestos", () => {
     expect(r.avisos.join(" ")).toMatch(/Caro/);
     expect(r.avisos.join(" ")).toMatch(/no mejora tu tasa/i);
   });
-  it("la opción de tarjeta hipotética queda marcada como no real", () => {
-    const r = generarOpciones({ saldo: 3_000_000, cuota: 153_000, tasaMensual: 0.03, tarjeta: { saldo: 2_000_000, tasaMensual: 0.035 } }, "intereses");
-    if (!r.ok) throw new Error("ok");
-    const t = r.opciones.find((o) => o.tipo === "tarjeta")!;
-    expect(t.esPropia).toBe(false);
-    expect(t.esHipotetica).toBe(true);
-  });
   it("con una oferta real, ninguna opción es hipotética (salvo abono)", () => {
     const r = generarOpciones({ saldo: 3_000_000, cuota: 153_000, tasaMensual: 0.03, ofertas: [{ nombre: "Banco", tasaMensual: 0.015 }] }, "intereses");
     if (!r.ok) throw new Error("ok");

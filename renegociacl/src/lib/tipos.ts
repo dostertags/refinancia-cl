@@ -6,10 +6,21 @@ export type Modo = "intereses" | "cuota";
 /** Oferta que la persona recibió de un banco. */
 export interface OfertaUsuario { nombre: string; tasaMensual: number; gastos?: number }
 
-/** Crédito vigente que se quiere renegociar (los datos que ingresa la persona). */
+/**
+ * Tarjeta de crédito. OBLIGATORIO: saldo. Además, al menos uno entre pagoMensual y tasaMensual.
+ * incluir = si se suma al total a refinanciar (por defecto sí).
+ */
+export interface TarjetaEntrada { nombre?: string; saldo?: number; pagoMensual?: number; tasaMensual?: number; incluir?: boolean }
+
+/**
+ * Crédito vigente que se quiere renegociar. OBLIGATORIO: saldo y cuota, más al menos uno entre
+ * tasaMensual y mesesRestantes (si falta uno, se calcula a partir del otro).
+ */
 export interface Credito {
-  saldo: number; cuota: number; tasaMensual: number;
-  tarjeta?: { saldo?: number; tasaMensual: number };
+  saldo: number; cuota: number;
+  tasaMensual?: number;
+  mesesRestantes?: number;
+  tarjetas?: TarjetaEntrada[]; // hasta 3
   ofertas?: OfertaUsuario[];
   abonoUnico?: number; // pesos que podría abonar hoy de una vez
 }
@@ -19,12 +30,13 @@ export type Entrada = Credito;
 /** Tasa publicada por una institución (viene de /rates.json). */
 export interface TasaMercado { institucion: string; tasaMensual: number }
 
-export type TipoOpcion = "tasa" | "cuota" | "plazo" | "abono" | "abonoUnico" | "tarjeta";
+export type TipoOpcion = "tasa" | "cuota" | "plazo" | "abono" | "abonoUnico";
 
 export interface OpcionRenegociacion {
   id: string; tipo: TipoOpcion; titulo: string; tasaMensual: number;
-  nuevaCuota: number; nuevosMeses: number;
-  totalPagar: number;      // todo lo que pagarías con esta opción (incluye gastos)
+  nuevaCuota: number;      // lo que pagarías al mes en total (incluye lo que quede fuera del refinanciamiento)
+  nuevosMeses: number;
+  totalPagar: number;      // todo lo que pagarías con esta opción entre todas tus deudas (incluye gastos)
   ahorroTotal: number;     // pesos ahorrados en total (negativo = pagas más)
   alivioMensual: number;   // pesos menos por mes (negativo = pagas más por mes)
   mesesMenos: number;      // meses que te ahorras
@@ -39,8 +51,15 @@ export interface OpcionRenegociacion {
 export type Opcion = OpcionRenegociacion;
 
 export interface FilaTasa { nombre: string; tasaMensual: number; caeAnual: number }
-export interface Actual { meses: number; totalPagar: number; intereses: number; caeAnual: number; primerosMeses: FilaAmortizacion[] }
+/** Situación de hoy sumando todas tus deudas consideradas (crédito + tarjetas). */
+export interface Actual {
+  meses: number; totalPagar: number; intereses: number; caeAnual: number; cuotaTotal: number;
+  primerosMeses: FilaAmortizacion[];
+}
+export interface ParteDeuda { nombre: string; saldo: number }
+/** Qué se junta en el crédito nuevo y qué se deja como está. */
+export interface Refinanciar { total: number; partes: ParteDeuda[]; excluidas: ParteDeuda[] }
 
 export type Resultado =
-  | { ok: true; actual: Actual; opciones: OpcionRenegociacion[]; comparacion: FilaTasa[]; avisos: string[]; nota?: string }
+  | { ok: true; actual: Actual; opciones: OpcionRenegociacion[]; comparacion: FilaTasa[]; avisos: string[]; supuestos: string[]; refinanciar: Refinanciar; nota?: string }
   | { ok: false; error: string };

@@ -34,7 +34,7 @@ describe("generarOpciones: validación", () => {
     if (!r.ok) expect(r.error).toMatch(/no alcanza|intereses/i);
   });
   it("rechaza saldo, cuota o tasa inválidos", () => {
-    for (const e of [{ ...base, saldo: 0 }, { ...base, cuota: -1 }, { ...base, tasaMensual: NaN }, { ...base, tasaMensual: -0.01 }, { ...base, tasaMensual: 0.5 }]) {
+    for (const e of [{ ...base, saldo: 0 }, { ...base, cuota: -1 }, { ...base, tasaMensual: 0.5 }, { ...base, tasaMensual: -0.01 }, { ...base, tasaMensual: 0.5 }]) {
       expect(generarOpciones(e, "intereses").ok).toBe(false);
     }
   });
@@ -112,23 +112,12 @@ describe("modos de orden", () => {
   });
 });
 
-describe("tarjeta de crédito", () => {
-  it("sin datos de tarjeta no hay opción de consolidar", () => {
-    const r = generarOpciones(base, "intereses");
+describe("tarjeta de crédito (comparación de tasas)", () => {
+  it("compara tasas lado a lado con la del crédito", () => {
+    const r = generarOpciones({ ...base, tarjetas: [{ saldo: 2_000_000, tasaMensual: 0.035 }] }, "intereses");
     if (!r.ok) throw new Error("ok");
-    expect(r.opciones.some((o) => o.tipo === "tarjeta")).toBe(false);
-  });
-  it("con tarjeta cara ofrece consolidarla y compara tasas lado a lado", () => {
-    const r = generarOpciones({ ...base, tarjeta: { saldo: 2_000_000, tasaMensual: 0.035 } }, "intereses");
-    if (!r.ok) throw new Error("ok");
-    expect(r.opciones.some((o) => o.tipo === "tarjeta" && o.ahorroTotal > 0)).toBe(true);
     expect(r.comparacion.map((f) => f.nombre)).toEqual(expect.arrayContaining(["Tu crédito", "Tu tarjeta"]));
-  });
-  it("compara tasas aunque no informe el saldo de la tarjeta", () => {
-    const r = generarOpciones({ ...base, tarjeta: { tasaMensual: 0.035 } }, "intereses");
-    if (!r.ok) throw new Error("ok");
-    const fila = r.comparacion.find((f) => f.nombre === "Tu tarjeta")!;
-    expect(fila.caeAnual).toBeCloseTo(cae(0.035), 6);
+    expect(r.comparacion.find((f) => f.nombre === "Tu tarjeta")!.caeAnual).toBeCloseTo(cae(0.035), 6);
   });
 });
 

@@ -16,10 +16,10 @@ cuota mensual. Todos los cálculos son código determinista; ningún LLM toca lo
 
 | Área | Estado |
 |---|---|
-| Motor de optimización, reglas R1–R7, cascada de relajación, modo "menor cuota" | Implementado, 147 tests de backend (91% de cobertura) |
+| Motor de optimización, reglas R1–R7, cascada de relajación, modo "menor cuota" | Implementado, 177 tests de backend (92% de cobertura) |
 | API FastAPI: sin estado, rate limit, cabeceras de seguridad, límites de entrada, errores sin eco de datos | Implementado y con tests de seguridad |
 | PDF (ReportLab, texto escapado, QR sin datos), modelos SQLAlchemy solo de datos públicos | Implementado y con tests |
-| Frontend Next.js 16 (4 pasos, consentimiento, glosario, gráficos, móvil) | Compila, lint limpio, 21 tests de componentes; probado a mano en móvil (375 px) contra la API real |
+| Frontend Next.js 16 (4 pasos, consentimiento, glosario, gráficos, móvil) | Compila, lint limpio, 35 tests de componentes; probado a mano en móvil (375 px) contra la API real |
 | E2E Playwright (`frontend/e2e`) | Escrito, **no ejecutado** en este entorno (requiere `npx playwright install chromium`) |
 | Scraper SERNAC (Playwright) | Reintentos, robots.txt, User-Agent, validación y límite de frecuencia con tests de la parte pura; **la navegación al Power BI real nunca se probó**. Ver [docs/SERNAC_DATOS_REALES.md](docs/SERNAC_DATOS_REALES.md) |
 | Boletines PDF SERNAC, benchmark CMF (Fuente 3) | Extracción de tablas lista; descubrimiento de boletines y CMF **pendientes** (la API informa `null`, no inventa cifras) |
@@ -107,8 +107,8 @@ Límites: 30 deudas, 20 ofertas, 30 solicitudes/min por IP. Las ofertas enviadas
 ## Tests
 
 ```bash
-cd backend && pytest                 # 147 tests, cobertura ≥ 80% (CI la exige)
-cd frontend && npm test              # 21 tests (vitest + Testing Library)
+cd backend && pytest                 # 177 tests, cobertura ≥ 80% (CI la exige)
+cd frontend && npm test              # 35 tests (vitest + Testing Library)
 cd frontend && npm run e2e           # Playwright (requiere ambos servidores y chromium)
 ```
 

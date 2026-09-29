@@ -1,13 +1,14 @@
 """Matemática financiera determinista. NUNCA se delega a un LLM (requisito del producto)."""
 from __future__ import annotations
 
+import math
 from typing import Iterable, Optional
 
 from app.config import (
     CAE_MAXIMO_REPORTABLE, MESES_MAX_TARJETA, SEMAFORO_AMARILLO_HASTA, SEMAFORO_VERDE_HASTA,
 )
 
-__all__ = ["MESES_MAX_TARJETA", "cuota_francesa", "ctc_prestamo", "tasa_mensual_a_cae", "calcular_cae",
+__all__ = ["tasa_desde_meses", "meses_desde_cuota", "MESES_MAX_TARJETA", "cuota_francesa", "ctc_prestamo", "tasa_mensual_a_cae", "calcular_cae",
            "amortizacion_forzosa_tarjeta", "cuota_minima_tarjeta", "cae_deuda", "cae_ponderada_actual", "semaforo", "uf_a_clp"]
 
 
@@ -105,3 +106,43 @@ def uf_a_clp(monto_uf: float, valor_uf: Optional[float]) -> float:
     if valor_uf is None or valor_uf <= 0:
         raise ValueError("Se requiere el valor de la UF para convertir deudas en UF")
     return monto_uf * valor_uf
+
+
+def tasa_desde_meses(saldo: float, cuota: float, n: int) -> Optional[float]:
+    """Tasa mensual implícita: la que hace que pagar `cuota` durante `n` meses cancele `saldo`.
+
+    None si la cuota no alcanza para pagar el saldo en esos meses, o si implicaría más de 20% mensual.
+    """
+    if saldo <= 0 or cuota <= 0 or n <= 0:
+        return None
+    total, holgura = cuota * n, 0.5 * n  # la cuota viene en pesos enteros: hasta $0,5 por cuota es redondeo
+    if total < saldo - holgura:
+        return None
+    if total <= saldo + holgura:
+        return 0.0
+
+    def vp(i: float) -> float:
+        return cuota * (1 - (1 + i) ** -n) / i
+
+    lo, hi = 1e-12, 0.2
+    if vp(hi) > saldo:
+        return None
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        if vp(mid) > saldo:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2
+
+
+def meses_desde_cuota(saldo: float, tasa: float, cuota: float) -> Optional[int]:
+    """Meses (enteros, hacia arriba) que toma pagar `saldo` con `cuota`. None si la cuota no cubre ni los intereses."""
+    if saldo <= 0 or cuota <= 0:
+        return None
+    if tasa == 0:
+        return max(1, math.ceil(saldo / cuota - 1e-9))
+    if cuota <= saldo * tasa + 1e-9:
+        return None
+    n = -math.log(1 - saldo * tasa / cuota) / math.log(1 + tasa)
+    return max(1, math.ceil(n - 0.05))

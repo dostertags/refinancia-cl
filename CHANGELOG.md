@@ -2,6 +2,19 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.3.0] — Tasa opcional y tarjetas que se suman al refinanciamiento
+
+Aplica a los dos proyectos (RenegociaCL y RefinanciaCL).
+
+- **La tasa de interés ya no es obligatoria.** Crédito: saldo y cuota obligatorios, más **tasa o meses restantes (al menos uno)**; la que falta se calcula.
+- **Tarjetas:** saldo obligatorio, más **pago mensual o tasa (al menos uno)**; lo que falte se calcula suponiendo pago en 24 meses (norma CMF) y se le avisa a la persona. Sin ninguno de los dos no se inventa nada.
+- **El total de las tarjetas se suma a la deuda a refinanciar** (`Deuda a refinanciar = crédito + tarjetas incluidas`) y se muestra con su desglose.
+- **Casilla "Incluir en el refinanciamiento"** por deuda (marcada por defecto). Lo desmarcado sigue igual, cuenta en lo que pagas hoy y en la cuota nueva, y ocupa parte del tope de cuota.
+- RenegociaCL: hasta 3 tarjetas, aviso si conviene dejar una tarjeta barata fuera, y datos de tarjeta sin saldo se avisan en vez de ignorarse.
+- RefinanciaCL: nuevo módulo `engine/deudas.py`, esquema con validación en español y sin eco de datos, `supuestos`, `total_a_refinanciar`, `partes_refinanciar` y `excluidas` en la respuesta.
+- **Cada campo dice "Obligatorio", "Una de las dos" u "Opcional"** (visible y leído por lectores de pantalla) y un cuadro "Qué necesitas" explica las reglas antes de llenar el formulario.
+- Tests: RenegociaCL 205, RefinanciaCL backend 177 (92% de cobertura) y frontend 35.
+
 ## [0.2.0] — Correcciones de la auditoría
 
 ### Seguridad y privacidad

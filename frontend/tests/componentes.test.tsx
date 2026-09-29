@@ -19,7 +19,7 @@ const base: Resultado = {
   tarjetas_amortizacion: [], analisis_una_deuda: null, reglas: [], alertas: [], sugerencias: [], mensajes: [],
   renta_minima_sugerida: null, fuente_ofertas: "sernac", aviso_ofertas: "Ofertas del SERNAC.",
   disclaimer: "Esta simulación no constituye una oferta de crédito.", aviso_retracto: "Tienes 20 días corridos para retractarte.",
-  enlaces_oficiales: {},
+  enlaces_oficiales: {}, supuestos: [], total_a_refinanciar: 0, partes_refinanciar: [], excluidas: [],
 };
 
 describe("Glosario", () => {

@@ -67,11 +67,13 @@ def _resolver(
     relajar_r5: bool,
     permitir_fuera: bool,
     objetivo: str = "costo",
+    fijas: Sequence[Deuda] = (),
 ) -> Optional[Tuple[Dict, Dict, Dict, bool]]:
     """Devuelve (x, y, s, aproximada) con valores 0/1, o None si es infactible.
 
     Lanza TimeoutError si el solver agota el tiempo sin encontrar ninguna solución."""
-    cap_cuota = TOPE_CUOTA_PCT_RENTA * renta
+    # Las deudas que el usuario deja fuera del refinanciamiento siguen pagándose y ocupan parte del tope de cuota.
+    cap_cuota = TOPE_CUOTA_PCT_RENTA * renta - sum(_cuota_fuera(f) for f in fijas)
 
     # Opciones válidas por deuda (R3: plazo <= plazo_max de la oferta; R5: tarjetas <= 24 salvo relajo).
     opciones: Dict[int, List[Tuple[int, int]]] = {}
@@ -117,7 +119,7 @@ def _resolver(
 
     comisiones = pulp.lpSum(ofertas[j].comision * v for (j, _), v in y.items())
     # R1: deuda total + comisiones <= 10 x renta.
-    prob += sum(d.monto_actual for d in deudas) + comisiones <= TOPE_ENDEUDAMIENTO_VECES_RENTA * renta
+    prob += sum(d.monto_actual for d in deudas) + sum(f.monto_actual for f in fijas) + comisiones <= TOPE_ENDEUDAMIENTO_VECES_RENTA * renta
 
     costo = pulp.lpSum(deudas[i].monto_actual * cf(j, n) * n * v for (i, j, n), v in x.items())
     costo += comisiones
@@ -142,7 +144,7 @@ def _resolver(
             {k: val(v) for k, v in s.items()}, aproximada)
 
 
-def _armar(renta, deudas, ofertas, sol, pasos) -> ResultadoOptimizacion:
+def _armar(renta, deudas, ofertas, sol, pasos, fijas=()) -> ResultadoOptimizacion:
     x, y, s, aproximada = sol
     prestamos: List[Prestamo] = []
     for (j, n), usado in sorted(y.items()):
@@ -167,15 +169,16 @@ def _armar(renta, deudas, ofertas, sol, pasos) -> ResultadoOptimizacion:
                         cuota=_cuota_fuera(deudas[i]), plazo_restante_meses=_plazo_fuera(deudas[i]))
              for i in fuera_idx]
 
-    cuota_nueva = sum(p.cuota for p in prestamos) + sum(f.cuota for f in fuera)
-    ctc_nuevo = sum(p.ctc for p in prestamos) + sum(f.cuota * f.plazo_restante_meses for f in fuera)
-    ctc_actual = sum(d.cuota_actual * d.plazo_restante_meses for d in deudas)
-    cuota_actual = sum(d.cuota_actual for d in deudas)
+    cuota_nueva = sum(p.cuota for p in prestamos) + sum(f.cuota for f in fuera) + sum(_cuota_fuera(f) for f in fijas)
+    ctc_nuevo = sum(p.ctc for p in prestamos) + sum(f.cuota * f.plazo_restante_meses for f in fuera) + sum(_cuota_fuera(f) * _plazo_fuera(f) for f in fijas)
+    ctc_actual = sum(d.cuota_actual * d.plazo_restante_meses for d in list(deudas) + list(fijas))
+    cuota_actual = sum(d.cuota_actual for d in list(deudas) + list(fijas))
 
-    monto_total = sum(p.monto for p in prestamos) + sum(f.monto for f in fuera)
+    monto_total = sum(p.monto for p in prestamos) + sum(f.monto for f in fuera) + sum(f.monto_actual for f in fijas)
     cae_nuevo = (
         sum(p.monto * p.cae for p in prestamos)
         + sum(deudas[i].monto_actual * finance.cae_deuda(deudas[i]) for i in fuera_idx)
+        + sum(f.monto_actual * finance.cae_deuda(f) for f in fijas)
     ) / monto_total
 
     alertas = []
@@ -189,7 +192,7 @@ def _armar(renta, deudas, ofertas, sol, pasos) -> ResultadoOptimizacion:
         estado="OK", prestamos=prestamos, deudas_fuera=fuera, pasos_cascada=list(pasos),
         cuota_total_nueva=cuota_nueva, ctc_nuevo=ctc_nuevo, ctc_actual=ctc_actual,
         ahorro_total=ctc_actual - ctc_nuevo, ahorro_mensual=cuota_actual - cuota_nueva,
-        cae_actual=finance.cae_ponderada_actual(deudas), cae_nuevo=cae_nuevo, alertas=alertas, aproximada=aproximada,
+        cae_actual=finance.cae_ponderada_actual(list(deudas) + list(fijas)), cae_nuevo=cae_nuevo, alertas=alertas, aproximada=aproximada,
     )
 
 
@@ -208,6 +211,7 @@ def optimizar(
     ofertas: Sequence[Oferta],
     objetivo: str = "costo",
     relajar_r5: bool = False,
+    fijas: Sequence[Deuda] = (),
 ) -> ResultadoOptimizacion:
     """Ejecuta el MILP con la cascada de relajación descrita en el módulo. `deudas` ya en CLP.
 
@@ -224,18 +228,18 @@ def optimizar(
     tiempo_agotado = False
     for relajar, fuera, pasos in escalones:
         try:
-            sol = _resolver(renta, deudas, ofertas, relajar, fuera, objetivo)
+            sol = _resolver(renta, deudas, ofertas, relajar, fuera, objetivo, fijas)
         except TimeoutError:
             tiempo_agotado = True
             break
         if sol is not None:
-            res = _armar(renta, deudas, ofertas, sol, pasos)
+            res = _armar(renta, deudas, ofertas, sol, pasos, fijas)
             # Dejar TODO fuera no es un refinanciamiento: se trata como "sin solución".
             if res.prestamos:
                 return res
 
     # Pasos 3 y 4: sin solución -> sugerir renta y alertar.
-    cuota_min = sum(_cuota_minima_posible(d, ofertas) for d in deudas)
+    cuota_min = sum(_cuota_minima_posible(d, ofertas) for d in deudas) + sum(_cuota_fuera(f) for f in fijas)
     cap = TOPE_CUOTA_PCT_RENTA * renta
     sugerencias: List[str] = []
     alertas: List[str] = []
@@ -253,7 +257,7 @@ def optimizar(
         ]
         alertas.append("Sobreendeudamiento crítico: ninguna combinación de ofertas cumple el tope de cuota del 25% de tu renta.")
     return ResultadoOptimizacion(
-        estado="SIN_SOLUCION", ctc_actual=sum(d.cuota_actual * d.plazo_restante_meses for d in deudas),
-        cae_actual=finance.cae_ponderada_actual(deudas), renta_minima_sugerida=renta_min,
+        estado="SIN_SOLUCION", ctc_actual=sum(d.cuota_actual * d.plazo_restante_meses for d in list(deudas) + list(fijas)),
+        cae_actual=finance.cae_ponderada_actual(list(deudas) + list(fijas)), renta_minima_sugerida=renta_min,
         sugerencias=sugerencias, alertas=alertas,
     )
