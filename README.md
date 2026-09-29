@@ -1,5 +1,9 @@
 # RefinanciaCL
 
+## Descripción
+
+Este repositorio reúne dos herramientas gratuitas y de código abierto para ayudar a personas en Chile a entender y reducir el costo de sus deudas. **RefinanciaCL** es un simulador de refinanciamiento de créditos de consumo y tarjetas: calcula tu carga financiera, verifica reglas de endeudamiento y usa optimización matemática para encontrar la combinación de ofertas que minimiza el costo total o la cuota mensual. **RenegociaCL** es una calculadora simple de una sola página, publicada en renegociacl.web.app: ingresas cuánto debes, tu cuota y tu tasa, y te muestra opciones ordenadas por ahorro en pesos y meses, con gráficos, paso a paso y modo oscuro. Todo el cálculo de RenegociaCL ocurre en tu dispositivo, sin registro ni seguimiento. Son simulaciones educativas: no constituyen ofertas de crédito ni asesoría financiera, y sus reglas legales aún requieren revisión de un abogado. El código incluye pruebas automatizadas, documentación regulatoria y licencia MIT.
+
 Simulador **educativo y open source (MIT)** que ayuda a personas naturales en Chile a ver si les conviene refinanciar sus
 créditos de consumo y tarjetas. Calcula tu situación actual (CAE, CTC, carga financiera), valida reglas de endeudamiento
 y busca, con programación lineal entera mixta (PuLP/CBC), la combinación de ofertas que minimiza el costo total **o** la
