@@ -2,9 +2,10 @@
 
 Reglas:
  - Crédito/línea: la cuota es obligatoria; de tasa y meses restantes basta uno y se calcula el otro.
- - Tarjeta: de pago mensual y tasa basta uno; lo que falta se calcula suponiendo que se paga en 24 meses (NCG 537 CMF).
+ - Tarjeta: de pago mensual y tasa basta uno; lo que falta se calcula suponiendo que se paga en 24 meses (supuesto de esta herramienta, no una norma).
 Nunca se inventan datos: si lo que falta no se puede calcular, se devuelve un problema en vez de un número.
-# TODO: verificar con abogado el supuesto de 24 meses para tarjetas.
+# La CMF regula la fórmula del PAGO MÍNIMO de tarjetas (NCG 537, 2025: monto no financiable + 5% del financiable); los 24 meses son un
+# supuesto propio para poder calcular. Ver docs/CIFRAS.md.
 """
 from __future__ import annotations
 
@@ -64,12 +65,12 @@ def _tarjeta(d: Deuda, r: Resolucion) -> None:
             r.problemas.append(f"Con ese pago {d.institucion} no se termina de pagar en {MESES_MAX_TARJETA} meses: necesito su tasa para calcularla.")
             return
         plazo = d.plazo_restante_meses or finance.meses_desde_cuota(d.monto_actual, tasa, pago) or MESES_MAX_TARJETA
-        r.supuestos.append(f"Para {d.institucion} supusimos que se paga en {MESES_MAX_TARJETA} meses (norma de la CMF) y calculamos su tasa: {_pct(tasa)} al mes.")
+        r.supuestos.append(f"Para {d.institucion} supusimos que se paga en {MESES_MAX_TARJETA} meses y calculamos su tasa: {_pct(tasa)} al mes.")
     else:
         assert tasa is not None  # el esquema exige pago o tasa
         pago = math.ceil(finance.cuota_francesa(d.monto_actual, tasa, MESES_MAX_TARJETA) - 1e-6)
         plazo = MESES_MAX_TARJETA
-        r.supuestos.append(f"Para {d.institucion} supusimos que se paga en {MESES_MAX_TARJETA} meses (norma de la CMF): un pago de {_pesos(pago)} al mes.")
+        r.supuestos.append(f"Para {d.institucion} supusimos que se paga en {MESES_MAX_TARJETA} meses: un pago de {_pesos(pago)} al mes.")
     r.deudas.append(d.model_copy(update={"tasa_mensual": tasa, "cuota_actual": pago, "plazo_restante_meses": plazo}))
 
 

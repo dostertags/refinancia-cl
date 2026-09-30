@@ -1,0 +1,25 @@
+name: Actualizar tasas del SERNAC
+# El comparador de créditos de consumo del SERNAC se actualiza una vez al mes. Este flujo hace UNA petición diaria (con User-Agent propio),
+# valida los datos y, solo si cambiaron, los guarda en el repositorio. Después hay que volver a desplegar RenegociaCL (npm run deploy).
+on:
+  schedule: [{cron: "0 7 * * *"}]   # 07:00 UTC ~ 03:00-04:00 en Chile (horario de baja demanda)
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  tasas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.11", cache: pip, cache-dependency-path: backend/requirements-dev.txt}
+      - run: pip install -r backend/requirements-dev.txt
+      - name: Descargar y validar (falla sin tocar nada si el informe cambió)
+        working-directory: backend
+        run: python -m app.scrapers.sernac_powerbi --salida ../renegociacl/public/rates.json app/data/sernac_simulaciones.json
+      - name: Guardar si hay cambios
+        run: |
+          git config user.name "tasas-bot"
+          git config user.email "tasas-bot@users.noreply.github.com"
+          git add renegociacl/public/rates.json backend/app/data/sernac_simulaciones.json
+          git diff --cached --quiet || git commit -m "data: tasas del comparador SERNAC ($(date -u +%F))" && git push

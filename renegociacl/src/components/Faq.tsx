@@ -17,7 +17,8 @@ const PREGUNTAS: { p: string; r: React.ReactNode }[] = [
   { p: "¿Puedo pagar antes de tiempo?", r: <p>Sí, en general puedes abonar o prepagar y así pagas menos intereses. La opción &quot;abona de una vez&quot; te muestra cuánto ahorrarías. Revisa en tu contrato si hay costo por prepagar.</p> },
   { p: "¿Mi crédito está en UF?", r: <p>Ingresa el saldo y la cuota en pesos de hoy. Como la UF sube con la inflación, la cuota real futura será un poco mayor a la calculada.</p> },
   { p: "¿Guardan mis datos?", r: <p>No. Todo se calcula en tu celular o computador; lo que escribes no se envía a ningún servidor y no usamos cookies de seguimiento. Si compartes el enlace, viaja con tus datos dentro: quien lo reciba los verá.</p> },
-  { p: "¿Estas opciones son ofertas de un banco?", r: <p>No. Las &quot;metas de negociación&quot; son ejemplos de cuánto podrías ahorrar si consigues una tasa menor. Solo las opciones con nombre de banco parten de una oferta que tú ingresaste.</p> },
+  { p: "¿De dónde salen las tasas del mercado?", r: <p>Del <b>Comparador de créditos de consumo del SERNAC</b>, donde cada institución informa sus simulaciones (tasa, CAE, cuota y costo total) para distintos montos y plazos. Las mostramos tal cual, con su fecha de carga y un enlace a la fuente. Son referenciales y no vinculantes.</p> },
+  { p: "¿Estas opciones son ofertas de un banco?", r: <p>No. Son simulaciones que cada institución informó al SERNAC: no son una oferta ni una aprobación de crédito. Tu tasa real depende de tu evaluación (ingresos, historial, monto). Cotiza en al menos tres instituciones y compara por el menor costo total (CTC).</p> },
 ];
 
 export default function Faq() {

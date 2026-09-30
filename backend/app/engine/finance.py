@@ -70,7 +70,7 @@ def amortizacion_forzosa_tarjeta(saldo: float, tasa_mensual: float, meses: int =
 def cuota_minima_tarjeta(saldo: float, tasa_mensual: float, comisiones: float = 0.0) -> float:
     """Regla 3 completa: la mayor entre la amortización forzosa a 24 meses e intereses + comisiones del período.
 
-    TODO: verificar con abogado la fórmula exacta de la NCG 537 (base de intereses y comisiones incluidas).
+    Es un supuesto de la herramienta: la NCG 537 de la CMF regula el pago MÍNIMO (monto no financiable + 5% del financiable), no un plazo de 24 meses.
     """
     return max(amortizacion_forzosa_tarjeta(saldo, tasa_mensual), saldo * tasa_mensual + comisiones)
 

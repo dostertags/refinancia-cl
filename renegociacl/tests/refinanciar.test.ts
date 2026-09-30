@@ -1,9 +1,14 @@
 // Reglas acordadas: crédito = saldo + cuota + (tasa o meses restantes); tarjetas = saldo + (pago mensual o tasa),
 // hasta 3, con casilla "incluir" (por defecto sí). Lo incluido se suma al total a refinanciar.
 import { describe, expect, it } from "vitest";
+import { parseMercado } from "@/lib/mercado";
+import subset from "./fixtures/rates-sernac-subset.json";
 import { cuotaFrancesa, generarOpciones, sumarTablas, tablaAmortizacion, tasaDesdeMeses, type Credito, type Resultado } from "@/lib/calc";
 
+const M = parseMercado(subset)!;
 const base: Credito = { saldo: 3_000_000, cuota: 153_000, tasaMensual: 0.03 };
+// Una oferta real que ingresó la persona (las opciones "tasa/cuota/plazo" solo nacen de ofertas reales, nunca inventadas).
+const oferta = { nombre: "Banco Amigo", tasaMensual: 0.012 };
 const ok = (r: Resultado) => { if (!r.ok) throw new Error(r.error); return r; };
 const tasaCredito = (r: Resultado) => ok(r).comparacion.find((f) => f.nombre === "Tu crédito")!.tasaMensual;
 
@@ -34,7 +39,7 @@ describe("crédito: tasa o meses restantes, al menos uno", () => {
     if (!r.ok) expect(r.error).toMatch(/tasa.*meses|meses.*tasa/i);
   });
   it("solo meses restantes: calcula la tasa y lo dice", () => {
-    const r = ok(generarOpciones({ saldo: 3_000_000, cuota: 153_000, mesesRestantes: 31 }, "intereses"));
+    const r = ok(generarOpciones({ saldo: 3_000_000, cuota: 153_000, mesesRestantes: 31 }, "intereses", M));
     expect(r.supuestos.join(" ")).toMatch(/a partir de los meses que te faltan/i);
     expect(Math.abs(tasaCredito(r) - 0.03)).toBeLessThan(0.004);
     expect(Math.abs(r.actual.meses - 31)).toBeLessThanOrEqual(1);
@@ -69,17 +74,19 @@ describe("tarjetas: total a refinanciar", () => {
     expect(conTarjeta.actual.totalPagar).toBeGreaterThan(sola.actual.totalPagar + 2_000_000);
   });
   it("las opciones de refinanciar mantienen la cuota total (crédito + tarjeta) o la bajan, nunca la ignoran", () => {
-    const tasa = conTarjeta.opciones.find((o) => o.tipo === "tasa")!;
+    const conOf = ok(generarOpciones({ ...base, tarjetas: [tarj], ofertas: [oferta] }, "intereses"));
+    const tasa = conOf.opciones.find((o) => o.tipo === "tasa")!;
     expect(tasa.nuevaCuota).toBe(253_000);
-    const cuotaOpt = ok(generarOpciones({ ...base, tarjetas: [tarj] }, "cuota")).opciones[0];
+    const cuotaOpt = ok(generarOpciones({ ...base, tarjetas: [tarj], ofertas: [oferta] }, "cuota")).opciones[0];
     expect(cuotaOpt.nuevaCuota).toBeLessThan(253_000);
   });
   it("incluir la tarjeta cara ahorra más que dejarla fuera", () => {
-    const fuera = ok(generarOpciones({ ...base, tarjetas: [{ ...tarj, incluir: false }] }, "intereses"));
-    expect(conTarjeta.opciones[0].ahorroTotal).toBeGreaterThan(fuera.opciones[0].ahorroTotal);
+    const dentro = ok(generarOpciones({ ...base, tarjetas: [tarj], ofertas: [oferta] }, "intereses"));
+    const fuera = ok(generarOpciones({ ...base, tarjetas: [{ ...tarj, incluir: false }], ofertas: [oferta] }, "intereses"));
+    expect(dentro.opciones[0].ahorroTotal).toBeGreaterThan(fuera.opciones[0].ahorroTotal);
   });
   it("incluir=false: no suma al total a refinanciar pero sigue en tu situación de hoy y en la nueva cuota", () => {
-    const r = ok(generarOpciones({ ...base, tarjetas: [{ ...tarj, incluir: false }] }, "intereses"));
+    const r = ok(generarOpciones({ ...base, tarjetas: [{ ...tarj, incluir: false }], ofertas: [oferta] }, "intereses"));
     expect(r.refinanciar.total).toBe(3_000_000);
     expect(r.refinanciar.excluidas.map((e) => e.nombre)).toEqual(["Falabella"]);
     expect(r.actual.cuotaTotal).toBe(253_000);
@@ -90,7 +97,7 @@ describe("tarjetas: total a refinanciar", () => {
     for (const o of conTarjeta.opciones) expect(o.totalPagar).toBeCloseTo(conTarjeta.actual.totalPagar - o.ahorroTotal, 4);
   });
   it("si la tarjeta es barata, avisa que dejarla fuera ahorra más", () => {
-    const r = ok(generarOpciones({ ...base, tarjetas: [{ nombre: "Barata", saldo: 2_000_000, pagoMensual: 90_000, tasaMensual: 0.008 }] }, "intereses"));
+    const r = ok(generarOpciones({ ...base, ofertas: [oferta], tarjetas: [{ nombre: "Barata", saldo: 2_000_000, pagoMensual: 90_000, tasaMensual: 0.008 }] }, "intereses"));
     expect(r.avisos.join(" ")).toMatch(/Barata.*fuera|fuera.*Barata/i);
   });
 });
@@ -129,7 +136,7 @@ describe("tarjetas: tasa o pago mensual, al menos uno", () => {
     expect(r.refinanciar.total).toBe(3_000_000);
   });
   it("saldo 0 o vacío se ignora sin ruido", () => {
-    const r = ok(generarOpciones({ ...base, tarjetas: [{ saldo: 0 }, { saldo: NaN }] }, "intereses"));
+    const r = ok(generarOpciones({ ...base, tarjetas: [{ saldo: 0 }, { saldo: NaN }] }, "intereses", M));
     expect(r.avisos).toEqual([]);
     expect(r.refinanciar.total).toBe(3_000_000);
   });

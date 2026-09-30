@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { cae, cuotaFrancesa, generarOpciones, simularPago, type Entrada } from "@/lib/calc";
 import { formatCLP, parseCLP, parseTasa } from "@/lib/format";
-import { resumirMercado } from "@/lib/mercado";
+import { parseMercado } from "@/lib/mercado";
+import subset from "./fixtures/rates-sernac-subset.json";
+
+const mercadoReal = parseMercado(subset)!;
 
 const base: Entrada = { saldo: 3_000_000, cuota: 153_000, tasaMensual: 0.03 };
 
@@ -40,8 +43,8 @@ describe("generarOpciones: validación", () => {
   });
 });
 
-describe("generarOpciones: sin ofertas del usuario", () => {
-  const r = generarOpciones(base, "intereses");
+describe("generarOpciones: con tasas oficiales del mercado", () => {
+  const r = generarOpciones(base, "intereses", mercadoReal);
   it("entrega entre 3 y 5 opciones, todas con ahorro, ordenadas de mayor a menor", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -56,10 +59,12 @@ describe("generarOpciones: sin ofertas del usuario", () => {
     expect(r.actual.meses).toBeGreaterThan(20);
     expect(r.actual.intereses).toBeCloseTo(r.actual.totalPagar - base.saldo, 0);
   });
-  it("es determinista", () => expect(generarOpciones(base, "intereses")).toEqual(r));
-  it("las metas de negociación son hipotéticas, no ofertas reales", () => {
+  it("es determinista", () => expect(generarOpciones(base, "intereses", mercadoReal)).toEqual(r));
+  it("las opciones de mercado citan su fuente oficial", () => {
     if (!r.ok) return;
-    expect(r.opciones.filter((o) => o.tipo === "tasa").every((o) => o.esPropia === false)).toBe(true);
+    const m = r.opciones.filter((o) => o.tipo === "mercado");
+    expect(m.length).toBeGreaterThan(0);
+    expect(m.every((o) => o.fuente?.texto.includes("SERNAC"))).toBe(true);
   });
 });
 
@@ -92,14 +97,14 @@ describe("generarOpciones: con ofertas del usuario", () => {
 
 describe("modos de orden", () => {
   it("modo cuota ordena por alivio mensual y el primero baja la cuota", () => {
-    const r = generarOpciones(base, "cuota");
+    const r = generarOpciones(base, "cuota", mercadoReal);
     if (!r.ok) throw new Error("ok");
     const alivios = r.opciones.map((o) => o.alivioMensual);
     expect(alivios).toEqual([...alivios].sort((a, b) => b - a));
     expect(r.opciones[0].alivioMensual).toBeGreaterThan(0);
   });
   it("en modo cuota puede haber opciones que cuestan más en total, y lo dicen", () => {
-    const r = generarOpciones(base, "cuota");
+    const r = generarOpciones(base, "cuota", mercadoReal);
     if (!r.ok) throw new Error("ok");
     const cara = r.opciones.find((o) => o.ahorroTotal < 0);
     if (cara) expect(cara.resumen).toMatch(/más en total/i);
@@ -140,21 +145,5 @@ describe("formato y entrada", () => {
     expect(parseTasa("2,5")).toBeCloseTo(0.025);
     expect(parseTasa("1.85")).toBeCloseTo(0.0185);
     expect(Number.isNaN(parseTasa("abc"))).toBe(true);
-  });
-});
-
-describe("resumirMercado", () => {
-  it("sin datos devuelve null (no se inventan tasas)", () => {
-    expect(resumirMercado({ actualizado: null, fuente: "", ofertas: [] })).toBeNull();
-  });
-  it("calcula mínimo, mediana y cantidad", () => {
-    const r = resumirMercado({
-      actualizado: "2026-09-28", fuente: "SERNAC",
-      ofertas: [{ institucion: "A", tasaMensual: 0.012 }, { institucion: "B", tasaMensual: 0.016 }, { institucion: "C", tasaMensual: 0.02 }],
-    })!;
-    expect(r.min).toBeCloseTo(0.012);
-    expect(r.mediana).toBeCloseTo(0.016);
-    expect(r.cantidad).toBe(3);
-    expect(r.mejor).toBe("A");
   });
 });

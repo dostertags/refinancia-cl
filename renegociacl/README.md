@@ -29,7 +29,7 @@ Lo que dejes fuera del refinanciamiento sigue igual y cuenta en lo que pagas cad
   que te hayan dado; en ese caso usa esas, con sus gastos.
 
 Supuestos: cuota fija (sistema francés), plazo máximo de 60 meses (consumo), ahorro nominal, sin comisiones salvo las que
-ingreses. `# TODO: verificar con abogado` los topes de 60 meses y 24 meses de tarjeta (NCG 537).
+ingreses. Los 24 meses para tarjetas son un supuesto de la calculadora (no una norma) y 60 meses es el máximo publicado en el comparador del SERNAC. Ver [docs/CIFRAS.md](../docs/CIFRAS.md).
 
 ## Tasas de mercado (CMF, SERNAC, bancos)
 

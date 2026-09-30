@@ -1,5 +1,6 @@
 // Tipos del dominio. Montos en pesos chilenos; tasas como fracción mensual (0.02 = 2% mensual).
 import type { FilaAmortizacion } from "./amortizacion";
+import type { ResumenMercado } from "./mercado";
 
 export type Modo = "intereses" | "cuota";
 
@@ -30,7 +31,11 @@ export type Entrada = Credito;
 /** Tasa publicada por una institución (viene de /rates.json). */
 export interface TasaMercado { institucion: string; tasaMensual: number }
 
-export type TipoOpcion = "tasa" | "cuota" | "plazo" | "abono" | "abonoUnico";
+/** mercado = simulación oficial del SERNAC informada por una institución; tasa/cuota/plazo = oferta que ingresó la persona. */
+export type TipoOpcion = "tasa" | "cuota" | "plazo" | "abono" | "abonoUnico" | "mercado";
+
+/** De dónde salen las cifras de una opción de mercado. */
+export interface FuenteOpcion { institucion: string; texto: string; url: string; fecha: string | null; montoBase: number; escalado: boolean; aviso: string }
 
 export interface OpcionRenegociacion {
   id: string; tipo: TipoOpcion; titulo: string; tasaMensual: number;
@@ -43,7 +48,7 @@ export interface OpcionRenegociacion {
   gastos: number;
   caeAnual: number;        // costo anual con gastos incluidos (TIR de los flujos)
   esPropia: boolean;       // parte de una oferta real que ingresó la persona
-  esHipotetica: boolean;   // parte de una meta de negociación inventada por la calculadora, no de un banco
+  fuente?: FuenteOpcion;   // solo opciones de mercado: fuente oficial citada
   resumen: string;         // explicación en lenguaje simple
   primerosMeses?: FilaAmortizacion[]; // para mostrar cómo se calcula
 }
@@ -61,5 +66,5 @@ export interface ParteDeuda { nombre: string; saldo: number }
 export interface Refinanciar { total: number; partes: ParteDeuda[]; excluidas: ParteDeuda[] }
 
 export type Resultado =
-  | { ok: true; actual: Actual; opciones: OpcionRenegociacion[]; comparacion: FilaTasa[]; avisos: string[]; supuestos: string[]; refinanciar: Refinanciar; nota?: string }
+  | { ok: true; actual: Actual; opciones: OpcionRenegociacion[]; comparacion: FilaTasa[]; avisos: string[]; supuestos: string[]; refinanciar: Refinanciar; mercado: ResumenMercado | null; nota?: string }
   | { ok: false; error: string };

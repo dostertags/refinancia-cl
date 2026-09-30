@@ -4,7 +4,7 @@ export const TERMINOS: { termino: string; definicion: string }[] = [
   { termino: "CTC", definicion: "Costo Total del Crédito: todo lo que terminarás pagando (cuotas más gastos) hasta el último mes." },
   { termino: "Carga financiera", definicion: "Qué parte de tu renta líquida se va cada mes en pagar cuotas de deudas. Verde: menos de 15%. Amarillo: entre 15% y 25%. Rojo: más de 25%." },
   { termino: "Retracto", definicion: "Derecho a arrepentirte de una repactación dentro del plazo que indica la ley, sin costo para ti." },
-  { termino: "NCG 537", definicion: "Norma de la CMF que obliga a amortizar en un máximo de 24 meses lo que financias en tu tarjeta de crédito." },
+  { termino: "NCG 537", definicion: "Norma de la CMF (2025) que fija la fórmula del pago mínimo de las tarjetas de crédito. Los 24 meses que usamos para tarjetas son un supuesto de esta herramienta, no parte de esa norma." },
 ];
 
 export default function Glosario() {

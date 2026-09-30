@@ -1,5 +1,10 @@
 // Genera y ordena las opciones de renegociación. Funciones puras: mismo dato de entrada, mismo resultado.
 //
+// Las opciones salen SOLO de datos reales:
+//  · simulaciones oficiales del Comparador de créditos de consumo del SERNAC (informadas por cada institución), o
+//  · ofertas que la persona ingresó.
+// No se inventan tasas ni "metas de negociación". Sin datos de mercado ni ofertas, solo quedan opciones que no requieren renegociar.
+//
 // Reglas de entrada (acordadas):
 //  · Crédito: saldo y cuota obligatorios + (tasa o meses restantes: al menos uno; se calcula el que falte).
 //  · Tarjetas (hasta 3): saldo obligatorio + (pago mensual o tasa: al menos uno). Cada una se puede incluir o no en el refinanciamiento.
@@ -9,12 +14,12 @@ import {
   type Abono, type FilaAmortizacion,
 } from "./amortizacion";
 import { formatCLP, formatPct } from "./format";
+import { nombreInstitucion, ofertasDeMercado, resumirMercado, type Mercado } from "./mercado";
 import type { Actual, Credito, FilaTasa, Modo, OpcionRenegociacion, Resultado, TarjetaEntrada, TipoOpcion } from "./tipos";
 
-export const PLAZO_MAX_CONSUMO = 60; // meses; tope de crédito de consumo (TODO: verificar con abogado)
-export const TARJETA_MESES = 24;     // NCG 537 CMF: lo financiado en tarjeta se amortiza en máx. 24 meses (TODO: verificar con abogado)
+export const PLAZO_MAX_CONSUMO = 60; // meses; máximo publicado en el comparador del SERNAC (12 a 60 cuotas)
+export const TARJETA_MESES = 24;     // SUPUESTO de esta calculadora para tarjetas (no es una norma; ver docs/CIFRAS.md)
 export const MAX_TARJETAS = 3;
-const FACTORES_META = [0.85, 0.75, 0.65]; // metas hipotéticas: -15%, -25%, -35% de tu tasa actual
 const PLAZOS_EXTENDIDOS = [36, 48, 60];
 const MAX_OPCIONES = 5;
 const TASA_MAX = 0.2;
@@ -86,20 +91,21 @@ function resolverTarjeta(t: TarjetaEntrada, i: number, total: number): { d?: Deu
     const imp = tasaDesdeMeses(saldo, pago, TARJETA_MESES);
     if (imp === null) return { aviso: `Con ese pago ${nombre} no se termina de pagar en ${TARJETA_MESES} meses: necesito su tasa para calcularla. Por ahora la dejamos fuera de los cálculos.` };
     const d = deDatos(nombre, true, incluir, saldo, pago, imp);
-    return d ? { d, supuesto: `Para ${nombre} supusimos que se paga en ${TARJETA_MESES} meses (norma de la CMF) y calculamos su tasa: ${pct(imp)} al mes.` } : { aviso: `No pudimos calcular ${nombre}: revisa su saldo y su pago.` };
+    return d ? { d, supuesto: `Para ${nombre} supusimos que se paga en ${TARJETA_MESES} meses y calculamos su tasa: ${pct(imp)} al mes.` } : { aviso: `No pudimos calcular ${nombre}: revisa su saldo y su pago.` };
   }
   if (tasa !== undefined) {
     const p = Math.ceil(cuotaFrancesa(saldo, tasa, TARJETA_MESES) - 1e-6);
     const d = deDatos(nombre, true, incluir, saldo, p, tasa);
-    return d ? { d, supuesto: `Para ${nombre} supusimos que se paga en ${TARJETA_MESES} meses (norma de la CMF): un pago de ${formatCLP(p)} al mes.` } : { aviso: `No pudimos calcular ${nombre}: revisa su saldo y su tasa.` };
+    return d ? { d, supuesto: `Para ${nombre} supusimos que se paga en ${TARJETA_MESES} meses: un pago de ${formatCLP(p)} al mes.` } : { aviso: `No pudimos calcular ${nombre}: revisa su saldo y su tasa.` };
   }
   return { aviso: `Para incluir ${nombre} necesito su pago mensual o su tasa (con una de las dos basta). Por ahora la dejamos fuera de los cálculos.` };
 }
 
-interface Meta { tasa: number; gastos: number; nombre: string; esPropia: boolean }
+interface Meta { tasa: number; gastos: number; nombre: string }
 interface Base {
   id: string; tipo: TipoOpcion; titulo: string; tasaMensual: number; nuevaCuota: number; nuevosMeses: number;
-  totalPagar: number; gastos: number; esPropia: boolean; esHipotetica: boolean; caeAnual: number; primerosMeses?: FilaAmortizacion[];
+  totalPagar: number; gastos: number; esPropia: boolean; caeAnual: number; primerosMeses?: FilaAmortizacion[];
+  fuente?: OpcionRenegociacion["fuente"];
 }
 
 /** Completa una opción con lo que se deriva de compararla con tu situación de hoy. */
@@ -109,6 +115,7 @@ function armar(b: Base, act: Actual): OpcionRenegociacion {
   const mesesMenos = Math.max(act.meses - b.nuevosMeses, 0);
   const gastosTxt = b.gastos > 0 ? ` (ya descontamos ${formatCLP(b.gastos)} de gastos)` : "";
   const antes = mesesMenos > 0 ? ` y terminas ${meses(mesesMenos)} antes` : "";
+  const masTotal = `Pero pagas ${formatCLP(-ahorroTotal)} más en total por el plazo más largo`;
   let resumen: string;
   switch (b.tipo) {
     case "tasa":
@@ -119,7 +126,12 @@ function armar(b: Base, act: Actual): OpcionRenegociacion {
       break;
     case "plazo":
       resumen = `Tu cuota baja ${formatCLP(alivioMensual)} al mes (queda en ${formatCLP(b.nuevaCuota)}). ` +
-        (ahorroTotal >= 0 ? `Ahorras ${formatCLP(ahorroTotal)} en total${gastosTxt}.` : `Pero pagas ${formatCLP(-ahorroTotal)} más en total por el plazo más largo${gastosTxt}.`);
+        (ahorroTotal >= 0 ? `Ahorras ${formatCLP(ahorroTotal)} en total${gastosTxt}.` : `${masTotal}${gastosTxt}.`);
+      break;
+    case "mercado":
+      resumen = alivioMensual > 0
+        ? `Tu cuota pasa a ${formatCLP(b.nuevaCuota)} (${formatCLP(alivioMensual)} menos al mes). ` + (ahorroTotal >= 0 ? `Ahorras ${formatCLP(ahorroTotal)} en total${antes}.` : `${masTotal}.`)
+        : `Tu cuota pasa a ${formatCLP(b.nuevaCuota)}. ` + (ahorroTotal >= 0 ? `Ahorras ${formatCLP(ahorroTotal)} en total${antes}.` : `Pagarías ${formatCLP(-ahorroTotal)} más en total.`);
       break;
     case "abono":
       resumen = `Ahorras ${formatCLP(ahorroTotal)}${antes} pagando ${formatCLP(-alivioMensual)} más al mes. No necesitas renegociar nada.`;
@@ -139,7 +151,7 @@ function caeDeSimulacion(saldo: number, gastos: number, tasa: number, cuota: num
 
 const suma = (xs: number[]): number => xs.reduce((a, b) => a + b, 0);
 
-export function generarOpciones(e: Credito, modo: Modo): Resultado {
+export function generarOpciones(e: Credito, modo: Modo, mercado: Mercado | null = null, opts: { seguro?: boolean } = {}): Resultado {
   const rc = resolverCredito(e);
   if (!rc.ok) return rc;
   const supuestos = [...rc.supuestos];
@@ -180,9 +192,11 @@ export function generarOpciones(e: Credito, modo: Modo): Resultado {
   for (const o of e.ofertas ?? []) if (o.tasaMensual > 0) comparacion.push({ nombre: o.nombre || "Otra oferta", tasaMensual: o.tasaMensual, caeAnual: cae(o.tasaMensual) });
 
   const P = refinanciar.total;
+  const seguro = opts.seguro ?? true;
+  const resumenMercado = resumirMercado(mercado, { monto: P, seguro });
   const tasaProm = suma(inc.map((d) => d.saldo * d.tasa)) / P;
   if (tasaProm === 0) {
-    return { ok: true, actual, opciones: [], comparacion, avisos, supuestos, refinanciar,
+    return { ok: true, actual, opciones: [], comparacion, avisos, supuestos, refinanciar, mercado: resumenMercado,
       nota: "Tu crédito no cobra intereses: no hay nada que renegociar. Lo mejor es seguir pagando tu cuota." };
   }
 
@@ -193,23 +207,21 @@ export function generarOpciones(e: Credito, modo: Modo): Resultado {
   const cuotaInc = suma(inc.map((d) => d.pago));
   const nInc = Math.max(...inc.map((d) => d.meses));
 
-  // Metas: primero lo que la persona ya recibió (si mejora su tasa); si no, metas hipotéticas.
+  // Ofertas reales que ingresó la persona (solo cuentan si mejoran su tasa).
   const ofertas = (e.ofertas ?? []).filter((o) => o.tasaMensual > 0);
   avisos.push(...ofertas.filter((o) => o.tasaMensual >= tasaProm).map((o) =>
     `La oferta de ${o.nombre || "otro banco"} (${pct(o.tasaMensual)} mensual) no mejora tu tasa actual (${pct(tasaProm)}), por eso no aparece en las opciones.`));
-  const propias = ofertas.filter((o) => o.tasaMensual < tasaProm);
-  const metas: Meta[] = propias.length > 0
-    ? propias.map((o) => ({ tasa: o.tasaMensual, gastos: Math.max(o.gastos ?? 0, 0), nombre: o.nombre || "otro banco", esPropia: true }))
-    : FACTORES_META.map((f) => ({ tasa: tasaProm * f, gastos: 0, nombre: "", esPropia: false }));
-  metas.sort((a, b) => a.tasa - b.tasa);
+  const metas: Meta[] = ofertas.filter((o) => o.tasaMensual < tasaProm)
+    .map((o) => ({ tasa: o.tasaMensual, gastos: Math.max(o.gastos ?? 0, 0), nombre: o.nombre || "otro banco" }))
+    .sort((a, b) => a.tasa - b.tasa);
   const mejor = metas[0];
-  const etiqueta = (m: Meta): string => (m.esPropia ? `Tasa ${pct(m.tasa)} de ${m.nombre}` : `Si logras bajar tu tasa a ${pct(m.tasa)} mensual`);
+  const etiqueta = (m: Meta): string => `Tasa ${pct(m.tasa)} de ${m.nombre}`;
 
   /** Arma una opción de crédito nuevo por `P` (lo incluido) más lo que queda fuera. */
   const conCreditoNuevo = (id: string, tipo: TipoOpcion, titulo: string, m: Meta, cuotaNueva: number, mesesNuevo: number, totalNuevo: number): OpcionRenegociacion => {
     const tabla = tablaAmortizacion(P, m.tasa, cuotaNueva);
     return armar({ id, tipo, titulo, tasaMensual: m.tasa, nuevaCuota: cuotaNueva + fijaPago, nuevosMeses: Math.max(mesesNuevo, fijaMeses),
-      totalPagar: totalNuevo + m.gastos + fijaTotal, gastos: m.gastos, esPropia: m.esPropia, esHipotetica: !m.esPropia,
+      totalPagar: totalNuevo + m.gastos + fijaTotal, gastos: m.gastos, esPropia: true,
       caeAnual: caeDeSimulacion(P, m.gastos, m.tasa, cuotaNueva), primerosMeses: tabla ? sumarTablas([tabla, ...tablaFija]).slice(0, 3) : undefined }, actual);
   };
 
@@ -221,11 +233,30 @@ export function generarOpciones(e: Credito, modo: Modo): Resultado {
     const c = inc.length === 1 ? costoMismoPlazo(P, cuotaInc, inc[0].tasa, m.tasa) : nInc <= PLAZO_MAX_CONSUMO ? costoPlazoFijo(P, m.tasa, nInc) : null;
     if (c) cand.push(conCreditoNuevo(`cuota-${k}`, "cuota", `${etiqueta(m)}, con el mismo plazo`, m, c.cuota, c.meses, c.total));
   });
-  for (const n of PLAZOS_EXTENDIDOS.filter((n) => n > nInc && n <= PLAZO_MAX_CONSUMO)) {
-    const c = costoPlazoFijo(P, mejor.tasa, n);
-    if (!c) continue;
-    const tag = mejor.esPropia ? `Tasa ${pct(mejor.tasa)} de ${mejor.nombre}` : `Con tasa ${pct(mejor.tasa)}`;
-    cand.push(conCreditoNuevo(`plazo-${n}`, "plazo", `${tag}, alargando a ${n} meses`, mejor, c.cuota, c.meses, c.total));
+  if (mejor) {
+    for (const n of PLAZOS_EXTENDIDOS.filter((n) => n > nInc && n <= PLAZO_MAX_CONSUMO)) {
+      const c = costoPlazoFijo(P, mejor.tasa, n);
+      if (c) cand.push(conCreditoNuevo(`plazo-${n}`, "plazo", `${etiqueta(mejor)}, alargando a ${n} meses`, mejor, c.cuota, c.meses, c.total));
+    }
+  }
+
+  // Simulaciones oficiales del SERNAC: la institución con menor CTC en cada plazo, llevada a tu monto. Se usan las cifras informadas.
+  const deMercado = ofertasDeMercado(mercado, { monto: P, seguro });
+  for (const o of deMercado) {
+    cand.push(armar({
+      id: `mercado-${o.cuotas}`, tipo: "mercado", tasaMensual: o.tasaMensual, nuevaCuota: o.cuota + fijaPago, nuevosMeses: Math.max(o.cuotas, fijaMeses),
+      titulo: `${nombreInstitucion(o.institucion)}: ${o.cuotas} cuotas, tasa ${pct(o.tasaMensual)} mensual`,
+      totalPagar: o.ctc + fijaTotal, gastos: 0, esPropia: false, caeAnual: o.cae,
+      fuente: { institucion: o.institucion, texto: mercado?.fuente ?? "", url: mercado?.urlFuente ?? "", fecha: mercado?.actualizado ?? null,
+        montoBase: o.montoBase, escalado: o.escalado, aviso: mercado?.aviso ?? "" },
+    }, actual));
+  }
+  if (mercado && deMercado.length === 0) {
+    const montos = mercado.simulaciones.map((s) => s.monto);
+    avisos.push(`No hay simulaciones publicadas para ${formatCLP(P)} (el SERNAC publica desde ${formatCLP(Math.min(...montos))} hasta ${formatCLP(Math.max(...montos))}), así que no comparamos con el mercado.`);
+  }
+  if (!mercado && ofertas.length === 0) {
+    avisos.push("No hay tasas de mercado cargadas ni ofertas tuyas para comparar: solo te mostramos opciones que no requieren renegociar.");
   }
 
   // Abonos: se aplican solo al crédito principal; el resto de tus deudas sigue igual.
@@ -237,7 +268,7 @@ export function generarOpciones(e: Credito, modo: Modo): Resultado {
     const t = tablaAmortizacion(cred.saldo, cred.tasa, cuotaNueva, abonos);
     if (!s || !t) return;
     cand.push(armar({ id, tipo, titulo, tasaMensual: cred.tasa, nuevaCuota: actual.cuotaTotal + (cuotaNueva - cred.pago), nuevosMeses: Math.max(s.meses, otrasMeses),
-      totalPagar: totalHoy - (cred.total - s.total), gastos: 0, esPropia: false, esHipotetica: false, caeAnual: cae(cred.tasa),
+      totalPagar: totalHoy - (cred.total - s.total), gastos: 0, esPropia: false, caeAnual: cae(cred.tasa),
       primerosMeses: sumarTablas([t, ...otras.map((d) => d.tabla)]).slice(0, 3) }, actual));
   };
   const extra = Math.max(Math.round((cred.pago * 0.1) / 1000) * 1000, 1000);
@@ -246,27 +277,36 @@ export function generarOpciones(e: Credito, modo: Modo): Resultado {
     conAbono("abonoUnico", "abonoUnico", `Abona ${formatCLP(e.abonoUnico)} hoy y sigue con tu cuota`, cred.pago, [{ mes: 0, monto: e.abonoUnico }]);
   }
 
-  // ¿Conviene dejar alguna tarjeta fuera? Se prueba la mejor meta sin ella.
-  const ahorroConIncluidas = (incluidas: Deuda[]): number | null => {
-    const Pi = suma(incluidas.map((d) => d.saldo)), cuotaI = suma(incluidas.map((d) => d.pago));
-    const s = simularPago(Pi, mejor.tasa, cuotaI);
-    const resto = deudas.filter((d) => !incluidas.includes(d));
-    return s ? totalHoy - (s.total + mejor.gastos + suma(resto.map((d) => d.total))) : null;
-  };
-  const conTodas = ahorroConIncluidas(inc);
-  for (const t of inc.filter((d) => d.esTarjeta)) {
-    const sin = ahorroConIncluidas(inc.filter((d) => d !== t));
-    if (conTodas !== null && sin !== null && sin > conTodas + 1000) {
-      avisos.push(`Dejar ${t.nombre} fuera del refinanciamiento te ahorra ${formatCLP(sin - conTodas)} más: su tasa (${pct(t.tasa)}) es menor que la del crédito nuevo. Desmarca "Incluir en el refinanciamiento" para verlo.`);
+  // ¿Tu tasa ya es mejor que la del mercado?
+  if (resumenMercado && deMercado.length > 0 && !cand.some((o) => o.tipo === "mercado" && o.ahorroTotal > 0) && tasaProm <= resumenMercado.menorTasa + 1e-9) {
+    avisos.push(`Tu tasa actual (${pct(tasaProm)}) ya es mejor que la más competitiva del mercado (${pct(resumenMercado.menorTasa)}, ${nombreInstitucion(resumenMercado.mejor.institucion)}): cambiarte no te conviene.`);
+  }
+
+  // ¿Conviene dejar alguna tarjeta fuera? Se prueba con la tasa objetivo más baja disponible (oferta propia o mercado), sin gastos del mercado.
+  const tasaObjetivo = Math.min(mejor?.tasa ?? Infinity, resumenMercado?.menorTasa ?? Infinity);
+  const gastosObjetivo = mejor && mejor.tasa <= (resumenMercado?.menorTasa ?? Infinity) ? mejor.gastos : 0;
+  if (Number.isFinite(tasaObjetivo)) {
+    const ahorroConIncluidas = (incluidas: Deuda[]): number | null => {
+      const Pi = suma(incluidas.map((d) => d.saldo)), cuotaI = suma(incluidas.map((d) => d.pago));
+      const s = simularPago(Pi, tasaObjetivo, cuotaI);
+      const resto = deudas.filter((d) => !incluidas.includes(d));
+      return s ? totalHoy - (s.total + gastosObjetivo + suma(resto.map((d) => d.total))) : null;
+    };
+    const conTodas = ahorroConIncluidas(inc);
+    for (const t of inc.filter((d) => d.esTarjeta)) {
+      const sin = ahorroConIncluidas(inc.filter((d) => d !== t));
+      if (conTodas !== null && sin !== null && sin > conTodas + 1000) {
+        avisos.push(`Dejar ${t.nombre} fuera del refinanciamiento te ahorra ${formatCLP(sin - conTodas)} más: su tasa (${pct(t.tasa)}) es menor que la del crédito nuevo. Desmarca "Incluir en el refinanciamiento" para verlo.`);
+      }
     }
   }
 
-  // Modo "intereses": solo lo que ahorra plata (de las variantes "mismo plazo" se muestra la mejor meta).
+  // Modo "intereses": solo lo que ahorra plata (de las variantes "mismo plazo" se muestra la mejor oferta propia).
   // Modo "cuota": solo lo que baja la cuota mensual.
   const sirve = (o: OpcionRenegociacion): boolean => modo === "intereses"
     ? o.ahorroTotal > 0 && (o.tipo !== "cuota" || o.id === "cuota-0")
-    : (o.tipo === "cuota" || o.tipo === "plazo") && o.alivioMensual > 0;
+    : (o.tipo === "cuota" || o.tipo === "plazo" || o.tipo === "mercado") && o.alivioMensual > 0;
   const criterio = (o: OpcionRenegociacion): number => (modo === "intereses" ? o.ahorroTotal : o.alivioMensual);
   const opciones = cand.filter(sirve).sort((a, b) => criterio(b) - criterio(a) || a.id.localeCompare(b.id)).slice(0, MAX_OPCIONES);
-  return { ok: true, actual, opciones, comparacion, avisos, supuestos, refinanciar };
+  return { ok: true, actual, opciones, comparacion, avisos, supuestos, refinanciar, mercado: resumenMercado };
 }

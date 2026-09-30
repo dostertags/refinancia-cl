@@ -1,19 +1,17 @@
 import type { Metadata, Viewport } from "next";
 import Tema from "@/components/Tema";
+import { CLASE_INICIAL_HTML, SCRIPT_TEMA } from "@/lib/tema";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "RenegociaCL — ¿Cuánto puedes ahorrar en tu crédito?",
   description: "Calculadora gratis para renegociar tu crédito en Chile: mira cuántos pesos y meses ahorras. Sin registro; tus datos no salen de tu celular.",
 };
-export const viewport: Viewport = { width: "device-width", initialScale: 1, colorScheme: "light dark" };
-
-// Aplica el tema guardado (o el del sistema) ANTES de pintar, para que no parpadee. Solo lee una preferencia local.
-const SCRIPT_TEMA = "try{var t=localStorage.getItem('tema');var d=t?t==='oscuro':matchMedia('(prefers-color-scheme: dark)').matches;if(d)document.documentElement.classList.add('dark')}catch(e){}";
+export const viewport: Viewport = { width: "device-width", initialScale: 1, colorScheme: "dark light" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es-CL" suppressHydrationWarning>
+    <html lang="es-CL" className={CLASE_INICIAL_HTML} suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} /></head>
       <body>
         <a href="#contenido" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-superficie focus:p-3">Saltar al contenido</a>

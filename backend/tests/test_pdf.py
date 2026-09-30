@@ -16,7 +16,7 @@ def test_informe_incluye_avisos_legales_y_enlaces(perfil, deuda_factory, oferta_
     res = simular(SimulacionRequest(perfil=perfil, deudas=[deuda_factory(), deuda_factory(institucion="B")],
                                     ofertas=[oferta_factory()]))
     txt = texto_pdf(generar_informe(res, url_qr="https://example.org/refinancia"))
-    assert "20 días corridos" in txt
+    assert "derecho a retracto" in txt and "sernac.cl" in txt.lower()
     assert "no constituye una oferta de crédito" in txt
     assert "sernac.cl" in txt.lower() and "cmfchile.cl" in txt.lower() and "fogaes" in txt.lower()
     assert "CAE" in txt and "CTC" in txt

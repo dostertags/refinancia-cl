@@ -1,9 +1,0 @@
-{
-  "aviso": "Ofertas ILUSTRATIVAS de ejemplo para desarrollo. Se reemplazan por los datos del Comparador SERNAC al ejecutar el scraper.",
-  "ofertas": [
-    {"institucion": "Banco Ejemplo A", "tasa_mensual": 0.0139, "plazo_max_meses": 60, "comision": 30000, "seguro_desgravamen": 0.0004, "fuente": "seed"},
-    {"institucion": "Banco Ejemplo B", "tasa_mensual": 0.0165, "plazo_max_meses": 60, "comision": 0, "seguro_desgravamen": 0.0005, "fuente": "seed"},
-    {"institucion": "Cooperativa Ejemplo C", "tasa_mensual": 0.0158, "plazo_max_meses": 48, "comision": 15000, "seguro_desgravamen": 0.0003, "monto_max": 8000000, "fuente": "seed"},
-    {"institucion": "Financiera Ejemplo D", "tasa_mensual": 0.0210, "plazo_max_meses": 60, "comision": 0, "seguro_desgravamen": 0.0006, "fuente": "seed"}
-  ]
-}

@@ -5,6 +5,7 @@ Los topes viven en app.config (configurables). # TODO: verificar con abogado —
 """
 from __future__ import annotations
 
+import re
 from typing import List, Tuple
 
 from app.config import (
@@ -24,10 +25,16 @@ DISCLAIMER = (
     "son criterios de esta herramienta y no reemplazan la normativa vigente ni las políticas de cada institución. "
     "Los datos que ingresas son de tu responsabilidad y no son verificados."
 )
+# El plazo de retracto depende del tipo de contrato (el SERNAC informa 10 días en varios casos). No se afirma un plazo único
+# para repactaciones porque no está verificado. TODO: verificar con abogado el retracto aplicable a cada operación.
 AVISO_RETRACTO = (
-    "Tienes 20 días corridos para retractarte de una repactación sin costo, "
-    "según la Ley del Consumidor."
-)  # TODO: verificar con abogado (Ley 20.555) el alcance del retracto en repactaciones
+    "Sobre tu derecho a retracto: depende del tipo de contrato y tiene plazos legales (el SERNAC informa 10 días en varios casos). "
+    "Confirma en sernac.cl o con tu institución antes de firmar."
+)
+ALERTA_SOBREENDEUDADO = (
+    f"Estás sobreendeudado según el criterio de esta herramienta: tu deuda total supera {TOPE_ENDEUDAMIENTO_VECES_RENTA:g} veces tu renta "
+    "(no es una norma de la CMF)."
+)
 ENLACES_OFICIALES = {
     "SERNAC": "https://www.sernac.cl",
     "Comparador de créditos SERNAC": "https://www.sernac.cl/portal/619/w3-article-84607.html",
@@ -92,6 +99,11 @@ def chequear_coherencia(deudas: List[Deuda]) -> List[str]:
     return problemas
 
 
+def _fecha_chile(iso: str) -> str:
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", iso or "")
+    return f"{m.group(3)}-{m.group(2)}-{m.group(1)}" if m else iso
+
+
 def descripcion_fuente(ofertas) -> Tuple[str, str]:
     """(fuente, aviso) según el origen de las ofertas usadas. Nunca se ocultan ofertas ilustrativas."""
     if not ofertas:
@@ -102,7 +114,10 @@ def descripcion_fuente(ofertas) -> Tuple[str, str]:
         aviso = ("Las ofertas usadas son ilustrativas (datos de ejemplo) y no son ofertas reales de ninguna institución. "
                  "Cotiza con las instituciones antes de decidir.")
     elif fuentes == {"sernac"}:
-        fuente, aviso = "sernac", "Ofertas obtenidas del Comparador de Créditos SERNAC; son referenciales."
+        fecha = next((o.fecha_datos for o in ofertas if o.fecha_datos), None)
+        cargada = f", cargadas el {_fecha_chile(fecha)}" if fecha else ""
+        fuente, aviso = "sernac", (f"Ofertas obtenidas de simulaciones oficiales del Comparador de créditos de consumo del SERNAC{cargada}; "
+                                   "son referenciales (cada institución las informó al SERNAC).")
     else:
         fuente, aviso = "usuario", "Ofertas ingresadas por el usuario; RefinanciaCL no las ha verificado."
     if any(not o.comision_conocida for o in ofertas):

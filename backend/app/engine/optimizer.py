@@ -50,7 +50,7 @@ def plazos_candidatos(plazo_max: int) -> List[int]:
 
 
 def _cuota_fuera(d: Deuda) -> float:
-    """Cuota que se sigue pagando si la deuda queda fuera. Tarjeta: al menos la mínima NCG 537 (R3)."""
+    """Cuota que se sigue pagando si la deuda queda fuera. Tarjeta: al menos la cuota a 24 meses (supuesto de la herramienta, R3)."""
     if d.tipo == "tarjeta":
         return max(d.cuota_actual, finance.cuota_minima_tarjeta(d.monto_actual, d.tasa_mensual))
     return d.cuota_actual
@@ -183,7 +183,7 @@ def _armar(renta, deudas, ofertas, sol, pasos, fijas=()) -> ResultadoOptimizacio
 
     alertas = []
     if PASO_R5 in pasos:
-        alertas.append("Se permitió superar los 24 meses en tarjetas (NCG 537) para lograr una cuota más baja o que cupiera en tu renta.")
+        alertas.append("Se permitió superar los 24 meses en tarjetas (supuesto de esta herramienta) para lograr una cuota más baja o que cupiera en tu renta.")
     if PASO_FUERA in pasos:
         alertas.append("Algunas deudas quedaron fuera del refinanciamiento para cumplir el tope de cuota.")
     if aproximada:

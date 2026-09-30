@@ -6,6 +6,7 @@ Los topes regulatorios viven aquí y no dispersos por el código (hallazgo MIN-0
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 
 def _f(nombre: str, defecto: float) -> float:
@@ -19,7 +20,7 @@ def _i(nombre: str, defecto: int) -> int:
 # --- Reglas de negocio ---
 TOPE_ENDEUDAMIENTO_VECES_RENTA = _f("TOPE_ENDEUDAMIENTO_VECES_RENTA", 10)   # R1
 TOPE_CUOTA_PCT_RENTA = _f("TOPE_CUOTA_PCT_RENTA", 0.25)                      # R2
-MESES_MAX_TARJETA = _i("MESES_MAX_TARJETA", 24)                              # R3 (NCG 537)
+MESES_MAX_TARJETA = _i("MESES_MAX_TARJETA", 24)                              # R3: supuesto de la herramienta (no es una norma)
 PLAZO_MAX_CONSUMO_MESES = _i("PLAZO_MAX_CONSUMO_MESES", 60)                  # R7
 SEMAFORO_VERDE_HASTA = _f("SEMAFORO_VERDE_HASTA", 0.15)                      # verde: < 15%
 SEMAFORO_AMARILLO_HASTA = _f("SEMAFORO_AMARILLO_HASTA", 0.25)                # amarillo: 15%-25%
@@ -35,7 +36,9 @@ MAX_DEUDAS = _i("MAX_DEUDAS", 30)
 SOLVER_TIME_LIMIT_S = _i("SOLVER_TIME_LIMIT_S", 8)
 RATE_LIMIT_PER_MIN = _i("RATE_LIMIT_PER_MIN", 30)
 FORCE_HTTPS = os.getenv("FORCE_HTTPS", "0") == "1"
-MAX_EDAD_OFERTAS_DIAS = _i("MAX_EDAD_OFERTAS_DIAS", 3)
+# El SERNAC actualiza su comparador una vez al mes: pasado este plazo los datos se marcan como desactualizados.
+MAX_EDAD_OFERTAS_DIAS = _i("MAX_EDAD_OFERTAS_DIAS", 40)
+SERNAC_DATA_PATH = os.getenv("SERNAC_DATA_PATH", str(Path(__file__).resolve().parent / "data" / "sernac_simulaciones.json"))
 MIN_HORAS_ENTRE_SCRAPES = _f("MIN_HORAS_ENTRE_SCRAPES", 20)
 MIN_FILAS_SCRAPE = _i("MIN_FILAS_SCRAPE", 3)
 SCRAPER_USER_AGENT = os.getenv(

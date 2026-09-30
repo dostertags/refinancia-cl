@@ -2,7 +2,7 @@
 from app.engine.simulator import simular
 from app.schemas import Perfil, SimulacionRequest
 
-RETRACTO = "20 días corridos"
+RETRACTO = "derecho a retracto"
 DISCLAIMER = "Esta simulación no constituye una oferta de crédito"
 
 
@@ -21,7 +21,8 @@ def test_sobreendeudado_no_ofrece_refinanciamiento(deuda_factory, oferta_factory
     r = simular(req(p, [deuda_factory(monto_actual=3_500_000)], [oferta_factory()]))
     assert r.estado == "SOBREENDEUDADO"
     assert r.propuesta is None
-    assert "Estás sobreendeudado según los criterios de la CMF" in r.alertas
+    assert any("criterio de esta herramienta" in a and "no es una norma de la CMF" in a for a in r.alertas)
+    assert not any("criterios de la CMF" in a for a in r.alertas)
     texto = " ".join(r.sugerencias).lower()
     assert "aval" in texto and "cmf" in texto and "fogaes" in texto
 

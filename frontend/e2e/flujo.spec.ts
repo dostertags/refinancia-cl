@@ -15,7 +15,7 @@ test("el usuario simula y ve avisos legales, origen de ofertas y glosario", asyn
   await page.getByRole("button", { name: /simular/i }).click();
 
   await expect(page.getByText(/no constituye una oferta de crédito/i).first()).toBeVisible();
-  await expect(page.getByText(/20 días corridos/i).first()).toBeVisible();
+  await expect(page.getByText(/derecho a retracto/i).first()).toBeVisible();
   await expect(page.getByText(/ilustrativas|Comparador de Créditos SERNAC/i).first()).toBeVisible();
   await page.getByText(/qué significan CAE/i).click();
   await expect(page.getByText(/Carga Anual Equivalente/i)).toBeVisible();

@@ -34,7 +34,7 @@ class Deuda(BaseModel):
     cuota_actual: Optional[float] = Field(default=None, ge=0)
     plazo_restante_meses: Optional[int] = Field(default=None, gt=0, le=600)
     moneda: Literal["CLP", "UF"] = "CLP"
-    # Tarjetas de casa comercial (Falabella, Ripley, etc.) también caen bajo NCG 537.
+    # Tarjetas de casa comercial (Falabella, Ripley, etc.): se tratan igual que las bancarias.
     casa_comercial: bool = False
     # Casilla "Incluir en el refinanciamiento": lo excluido cuenta en la situación de hoy y en la cuota nueva.
     incluir: bool = True
@@ -66,6 +66,7 @@ class Oferta(BaseModel):
     fuente: str = "manual"  # seed | sernac | manual | usuario
     # False cuando el origen (p. ej. el comparador SERNAC) no informa comisiones ni seguros.
     comision_conocida: bool = True
+    fecha_datos: Optional[str] = None  # fecha de carga de la fuente (ISO), p. ej. la del comparador del SERNAC
 
 
 class SimulacionRequest(BaseModel):

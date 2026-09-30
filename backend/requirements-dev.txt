@@ -2,3 +2,4 @@
 pytest>=8.0
 pytest-cov>=5.0
 pytest-asyncio>=0.23
+pdfplumber>=0.11  # solo para leer el PDF generado en los tests

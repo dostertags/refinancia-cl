@@ -15,7 +15,7 @@ import secrets
 import time
 from typing import Optional
 
-from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request, Response
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -79,7 +79,9 @@ def crear_app() -> FastAPI:
             raise HTTPException(422, "Debes aceptar que esta simulación es solo educativa y no una oferta de crédito.")
         updates = {}
         if req.ofertas is None:
-            updates["ofertas"] = offers.obtener_ofertas()[0]
+            # Solo se usa el monto total a refinanciar para elegir la simulación publicada más cercana; no se guarda nada.
+            monto = sum(d.monto_actual * (req.valor_uf or 0 if d.moneda == "UF" else 1) for d in req.deudas if d.incluir)
+            updates["ofertas"] = offers.obtener_ofertas(monto or None)[0]
         else:  # el cliente no puede hacerse pasar por SERNAC ni por otra fuente
             updates["ofertas"] = [o.model_copy(update={"fuente": "usuario"}) for o in req.ofertas]
         if req.valor_uf is None and any(d.moneda == "UF" for d in req.deudas):
@@ -100,10 +102,12 @@ def crear_app() -> FastAPI:
     def health():
         return {"status": "ok"}
 
-    @app.get("/api/ofertas", tags=["mercado"], summary="Ofertas vigentes (caché 24 h)")
-    def ofertas_vigentes():
-        lista, aviso = offers.obtener_ofertas()
-        return {"aviso": aviso, "ofertas": lista}
+    @app.get("/api/ofertas", tags=["mercado"], summary="Tasas de mercado (simulaciones oficiales del SERNAC)")
+    def ofertas_vigentes(monto: Optional[float] = Query(default=None, gt=0, le=1e9)):
+        doc = offers.cargar_documento()
+        lista, aviso = offers.obtener_ofertas(monto)
+        return {"fuente": doc["fuente"] if doc else None, "url_fuente": doc["url_fuente"] if doc else None,
+                "actualizado": doc["actualizado"] if doc else None, "aviso": aviso, "ofertas": lista}
 
     @app.get("/api/indicadores", tags=["mercado"], summary="UF y UTM del día")
     async def indicadores_dia():
@@ -143,13 +147,13 @@ def crear_app() -> FastAPI:
 
 
 async def _correr_scrape() -> None:
-    from app.scrapers.sernac import scrape_sernac
+    from app.scrapers import sernac_powerbi
     try:
-        lista = await scrape_sernac()
-        offers.guardar_ofertas(lista)  # scrape_sernac ya validó el lote; si falla, se conserva lo anterior
-        logger.info("Scrape SERNAC: %d ofertas", len(lista))
+        doc = await run_in_threadpool(sernac_powerbi.obtener_documento)
+        offers.guardar_documento(doc)  # validado y atómico; si algo falla se conserva el archivo anterior
+        logger.info("Scrape SERNAC: %d simulaciones (fecha de carga %s)", len(doc["simulaciones"]), doc["actualizado"])
     except Exception:
-        logger.exception("Falló el scrape de SERNAC; se conservan las ofertas anteriores")
+        logger.exception("Falló el scrape de SERNAC; se conservan las tasas anteriores")
 
 
 app = crear_app()

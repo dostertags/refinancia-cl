@@ -18,17 +18,16 @@ cuota mensual. Todos los cálculos son código determinista; ningún LLM toca lo
 |---|---|
 | Motor de optimización, reglas R1–R7, cascada de relajación, modo "menor cuota" | Implementado, 177 tests de backend (92% de cobertura) |
 | API FastAPI: sin estado, rate limit, cabeceras de seguridad, límites de entrada, errores sin eco de datos | Implementado y con tests de seguridad |
-| PDF (ReportLab, texto escapado, QR sin datos), modelos SQLAlchemy solo de datos públicos | Implementado y con tests |
+| PDF (ReportLab, texto escapado, QR sin datos), sin base de datos | Implementado y con tests |
 | Frontend Next.js 16 (4 pasos, consentimiento, glosario, gráficos, móvil) | Compila, lint limpio, 35 tests de componentes; probado a mano en móvil (375 px) contra la API real |
 | E2E Playwright (`frontend/e2e`) | Escrito, **no ejecutado** en este entorno (requiere `npx playwright install chromium`) |
-| Scraper SERNAC (Playwright) | Reintentos, robots.txt, User-Agent, validación y límite de frecuencia con tests de la parte pura; **la navegación al Power BI real nunca se probó**. Ver [docs/SERNAC_DATOS_REALES.md](docs/SERNAC_DATOS_REALES.md) |
-| Boletines PDF SERNAC, benchmark CMF (Fuente 3) | Extracción de tablas lista; descubrimiento de boletines y CMF **pendientes** (la API informa `null`, no inventa cifras) |
+| Scraper SERNAC (Power BI `querydata`, una petición HTTP) | Obtiene las simulaciones públicas del comparador, las valida y las guarda; probado con fixtures y ejecutado en vivo (870 simulaciones, 2026-09-29). Ver [docs/SERNAC_DATOS_REALES.md](docs/SERNAC_DATOS_REALES.md) |
+| TIP/TMC de la CMF | **Pendiente** (requiere API key personal); no se inventan cifras |
 | Subida de cartola PDF, score ML | No implementado |
 | Docker, compose, CI | Escritos; **no se ejecutaron** `docker build` ni los workflows en este entorno |
 | Base legal de topes y retracto | **Sin verificar por un abogado** (ver [docs/REGULACION.md](docs/REGULACION.md)) |
 
-Sin ofertas reales scrapeadas, la app usa una **semilla ilustrativa** (`fuente: "seed"`). Cada resultado, la UI y el PDF
-lo declaran explícitamente ("no son ofertas reales de ninguna institución").
+Las tasas de mercado salen **solo** de las simulaciones oficiales del comparador del SERNAC (fuente y fecha se muestran en la app). Si no hay datos, la app lo dice y no inventa tasas. Auditoría de cada cifra: [docs/CIFRAS.md](docs/CIFRAS.md).
 
 ## Privacidad (decisión de diseño)
 
@@ -45,9 +44,9 @@ apunta a la herramienta y no contiene datos. Portar el motor al navegador (TS/WA
 |---|---|---|
 | R1 Deuda total ≤ 10× renta | `simulator.py`, `optimizer.py` (con comisiones) | Si se supera: alerta CMF, sin refinanciamiento, sugiere aval/codeudor + CMF/FOGAES |
 | R2 Cuota ≤ 25% renta | MILP + alerta si la carga **actual** ya lo supera | Restricción dura; si no cabe, cascada y sugerencias |
-| R3 Tarjetas ≤ 24 meses (NCG 537) | MILP; `finance.cuota_minima_tarjeta` (mayor entre amortización 24 m e intereses + comisiones); tarjetas dejadas fuera pagan al menos ese mínimo | Se verifica sobre el resultado real, no solo la bandera de la cascada |
+| R3 Tarjetas en 24 meses (supuesto de la herramienta) | MILP; `finance.cuota_minima_tarjeta` (mayor entre amortización 24 m e intereses + comisiones); tarjetas dejadas fuera pagan al menos ese mínimo | Se verifica sobre el resultado real, no solo la bandera de la cascada |
 | R4 CAE/CTC siempre | `Prestamo`, PDF, UI | CAE por TIR, CTC, cuota, intereses+seguros+gastos; CAE actual con la misma vara |
-| R5 Retracto 20 días | `rules.AVISO_RETRACTO` | En cada resultado, UI y PDF |
+| R5 Aviso de retracto (sin plazo único afirmado) | `rules.AVISO_RETRACTO` | En cada resultado, UI y PDF |
 | R6 No es oferta + consentimiento | `rules.DISCLAIMER`, casilla obligatoria, la API exige `acepta_terminos` | En cada resultado, UI y PDF |
 | R7 Plazo máx. 60 meses (consumo) | `config.PLAZO_MAX_CONSUMO_MESES` | Se recorta y se avisa; aparece en la verificación de reglas |
 
@@ -85,11 +84,11 @@ uvicorn app.main:app --reload                          # http://localhost:8000/d
 cd frontend && npm install && npm run dev              # http://localhost:3000
 
 # Todo con Docker
-cp .env.example .env   # define POSTGRES_PASSWORD
+cp .env.example .env
 docker compose up --build
 ```
 
-Variables de entorno documentadas en [`.env.example`](.env.example). Scraper: `playwright install chromium`.
+Variables de entorno documentadas en [`.env.example`](.env.example). Actualizar tasas: `cd backend && python -m app.scrapers.sernac_powerbi --salida ../renegociacl/public/rates.json app/data/sernac_simulaciones.json`.
 
 ## API
 

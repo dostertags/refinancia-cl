@@ -18,7 +18,7 @@ const base: Resultado = {
   estado: "SIN_DEUDAS", fecha_calculo: "2026-09-28", renta_considerada: 1_000_000, situacion_actual: null, propuesta: null,
   tarjetas_amortizacion: [], analisis_una_deuda: null, reglas: [], alertas: [], sugerencias: [], mensajes: [],
   renta_minima_sugerida: null, fuente_ofertas: "sernac", aviso_ofertas: "Ofertas del SERNAC.",
-  disclaimer: "Esta simulación no constituye una oferta de crédito.", aviso_retracto: "Tienes 20 días corridos para retractarte.",
+  disclaimer: "Esta simulación no constituye una oferta de crédito.", aviso_retracto: "Sobre tu derecho a retracto: confirma en sernac.cl.",
   enlaces_oficiales: {}, supuestos: [], total_a_refinanciar: 0, partes_refinanciar: [], excluidas: [],
 };
 
@@ -81,7 +81,7 @@ describe("StepResultado", () => {
   it("muestra siempre el disclaimer y el aviso de retracto", () => {
     render(<StepResultado res={base} onNext={vi.fn()} onBack={vi.fn()} />);
     expect(screen.getByText(/no constituye una oferta de crédito/i)).toBeInTheDocument();
-    expect(screen.getByText(/20 días corridos/i)).toBeInTheDocument();
+    expect(screen.getByText(/derecho a retracto/i)).toBeInTheDocument();
   });
 
   it("explica qué hacer cuando los datos son inconsistentes", () => {

@@ -68,7 +68,7 @@ def _avisos(req: SimulacionRequest, deudas: List[Deuda], renta: float, actual: S
             minima = finance.cuota_minima_tarjeta(d.monto_actual, d.tasa_mensual)
             if d.cuota_actual < minima - 1:
                 avisos.append(f"Tu cuota actual de la tarjeta {d.institucion} ({_pesos(d.cuota_actual)}) es menor que la amortización "
-                              f"mínima de {MESES_MAX_TARJETA} meses ({_pesos(minima)}, NCG 537).")
+                              f"mínima de {MESES_MAX_TARJETA} meses ({_pesos(minima)}, supuesto de esta herramienta).")
     if actual.pct_renta_comprometida > TOPE_CUOTA_PCT_RENTA + 1e-9:
         avisos.append(f"Hoy tu cuota mensual total supera el {TOPE_CUOTA_PCT_RENTA:.0%} de tu renta "
                       f"({actual.pct_renta_comprometida:.1%}).")
@@ -131,7 +131,7 @@ def simular(req: SimulacionRequest) -> ResultadoSimulacion:
             analisis_una_deuda=una,
             reglas=[ReglaVerificada(regla="R1", titulo=f"Tope de endeudamiento ({TOPE_ENDEUDAMIENTO_VECES_RENTA:g}x renta)", cumple=False,
                                     detalle="Tu deuda total supera 10 veces tu renta líquida mensual.")],
-            alertas=["Estás sobreendeudado según los criterios de la CMF"] + avisos,
+            alertas=[rules.ALERTA_SOBREENDEUDADO] + avisos,
             sugerencias=[
                 "La única alternativa es una reprogramación con aval o codeudor directamente con tu institución.",
                 "Pide asesoría en la CMF (www.cmfchile.cl) y revisa el Programa de Educación Financiera (CMF Educa).",
@@ -221,7 +221,7 @@ def _reglas(deuda_total: float, renta: float, cuota_total: float, prestamos: Lis
         ReglaVerificada(regla="R2", titulo=f"Cuota mensual <= {TOPE_CUOTA_PCT_RENTA:.0%} de la renta",
                         cumple=rules.cumple_tope_cuota(cuota_total, renta),
                         detalle=f"La cuota total equivale al {cuota_total / renta:.1%} de tu renta."),
-        ReglaVerificada(regla="R3", titulo=f"Amortización de tarjetas en {MESES_MAX_TARJETA} meses (NCG 537)",
+        ReglaVerificada(regla="R3", titulo=f"Tarjetas en {MESES_MAX_TARJETA} meses (supuesto de esta herramienta)",
                         cumple=not tarjeta_larga,
                         detalle=(f"Ninguna tarjeta supera los {MESES_MAX_TARJETA} meses." if not tarjeta_larga
                                  else f"Una tarjeta quedó a más de {MESES_MAX_TARJETA} meses para cumplir tu tope de cuota o por tu elección.")),

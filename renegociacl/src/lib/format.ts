@@ -33,3 +33,9 @@ export function parseTasa(txt: string): number {
   const n = parseFloat(txt.replace(",", "."));
   return Number.isFinite(n) && n >= 0 ? n / 100 : NaN;
 }
+
+/** "2026-09-29" -> "29-09-2026" (formato usado en Chile). Si no es una fecha ISO, la devuelve tal cual. */
+export function formatFecha(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : iso ?? "";
+}

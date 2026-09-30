@@ -1,13 +1,13 @@
 """Tests de seguridad y privacidad (hallazgos CRIT-001/002/003, MAJ-006/008)."""
 import logging
-import sqlite3
+import hashlib
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app import config, main
-from app.db.session import DATABASE_URL
 from app.main import app
 from app.middleware import RateLimitMiddleware
 from tests.test_api import PAYLOAD
@@ -51,10 +51,10 @@ def test_ofertas_del_cliente_quedan_marcadas_como_usuario():
     assert r["fuente_ofertas"] == "usuario"  # el cliente no puede hacerse pasar por SERNAC
 
 
-def test_resultado_con_semilla_lo_declara():
+def test_resultado_declara_que_las_ofertas_son_del_sernac_con_su_fecha():
     r = client.post("/api/simular", json=PAYLOAD).json()
-    assert r["fuente_ofertas"] in {"ilustrativas", "sernac"}
-    assert r["aviso_ofertas"]
+    assert r["fuente_ofertas"] == "sernac"
+    assert "SERNAC" in r["aviso_ofertas"] and "29-09-2026" in r["aviso_ofertas"]
 
 
 def test_exige_consentimiento_expreso():
@@ -100,28 +100,28 @@ def test_https_forzado_redirige(monkeypatch):
 
 
 def test_no_se_persisten_ni_se_loguean_datos_del_usuario(caplog):
+    """No existe base de datos ni archivo donde caiga la renta o las deudas: el único archivo de datos es el de tasas públicas."""
     caplog.set_level(logging.DEBUG)
     renta, monto = 7_654_321, 6_543_210
+    datos = Path(config.SERNAC_DATA_PATH)
+    huella = hashlib.sha256(datos.read_bytes()).hexdigest()
     payload = {"acepta_terminos": True, "perfil": {"renta_liquida": renta},
                "deudas": [{"institucion": "Centinela", "monto_actual": monto, "tasa_mensual": 0.02, "cuota_actual": 346_000, "plazo_restante_meses": 24}]}
     assert client.post("/api/simular", json=payload).status_code == 200
     assert client.post("/api/informe", json=payload).status_code == 200
-    con = sqlite3.connect(DATABASE_URL.replace("sqlite:///", ""))
-    for (tabla,) in con.execute("select name from sqlite_master where type='table'").fetchall():
-        volcado = str(con.execute(f"select * from {tabla}").fetchall())
-        assert str(renta) not in volcado and str(monto) not in volcado and "Centinela" not in volcado
+    assert hashlib.sha256(datos.read_bytes()).hexdigest() == huella                     # el archivo de tasas no cambió
+    assert str(renta) not in datos.read_text(encoding="utf-8") and "Centinela" not in datos.read_text(encoding="utf-8")
+    assert not list(Path(__file__).resolve().parents[1].rglob("*.db"))                   # ninguna base de datos en el proyecto
     assert str(renta) not in caplog.text and str(monto) not in caplog.text and "Centinela" not in caplog.text
 
 
 def test_inyeccion_sql_y_xss_en_campos_de_texto_son_inertes():
     inst = "x'; DROP TABLE ofertas; --<script>alert(1)</script>"
     p = {**PAYLOAD, "deudas": [{**PAYLOAD["deudas"][0], "institucion": inst}]}
-    client.get("/api/ofertas")  # asegura que la tabla exista
     r = client.post("/api/simular", json=p)
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("application/json")  # JSON, nunca HTML
-    con = sqlite3.connect(DATABASE_URL.replace("sqlite:///", ""))
-    assert con.execute("select count(*) from sqlite_master where name='ofertas'").fetchone()[0] == 1
+    assert client.get("/api/ofertas").status_code == 200              # nada se rompió
 
 
 def test_scrape_exige_token_y_limita_frecuencia(monkeypatch):

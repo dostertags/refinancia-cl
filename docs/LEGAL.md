@@ -14,7 +14,7 @@ Este documento lista lo que **no** está resuelto. No es asesoría legal.
 
 1. **¿Podría interpretarse como asesoría financiera regulada o requerir inscripción/registro ante la CMF?** No lo sé.
 2. **¿Se podría confundir con un prestamista o intermediario?** El texto lo evita, pero la evaluación corresponde a un abogado.
-3. **Base legal de los topes** (10× renta, 25%, 24 meses NCG 537, 60 meses, retracto de 20 días): ver [REGULACION.md](REGULACION.md).
+3. **Base legal de los topes** (10× renta, 25%, 24 meses en tarjetas, 60 meses, retracto); ver también [CIFRAS.md](CIFRAS.md): ver [REGULACION.md](REGULACION.md).
 4. **Normativa sobre sobreendeudamiento:** el proyecto no ha verificado qué leyes recientes le aplican (por ejemplo, la
    auditoría mencionó la Ley 21.673 y no pude confirmar su contenido).
 5. **Protección de datos:** Ley 19.628 y Ley 21.719 (datos personales). Aunque no se almacenan datos, sí se procesan en

@@ -1,5 +1,6 @@
 import type { FilaAmortizacion } from "@/lib/amortizacion";
-import { formatCLP, formatPct } from "@/lib/format";
+import { formatCLP, formatFecha, formatPct } from "@/lib/format";
+import { nombreInstitucion } from "@/lib/mercado";
 import type { Actual, OpcionRenegociacion } from "@/lib/tipos";
 
 function TablaMeses({ titulo, filas }: { titulo: string; filas: FilaAmortizacion[] }) {
@@ -25,7 +26,7 @@ function TablaMeses({ titulo, filas }: { titulo: string; filas: FilaAmortizacion
 
 export default function OpcionCard({ o, rango, actual }: { o: OpcionRenegociacion; rango: number; actual: Actual }) {
   const mejor = rango === 0;
-  const esMeta = o.esHipotetica && o.tipo !== "abono" && o.tipo !== "abonoUnico";
+  const f = o.fuente;
   return (
     <li className={`rounded-xl border p-4 ${mejor ? "border-brand bg-brand-fondo" : "border-borde bg-superficie"}`}>
       <div className="flex items-start gap-3">
@@ -36,7 +37,12 @@ export default function OpcionCard({ o, rango, actual }: { o: OpcionRenegociacio
             {mejor && <span className="ml-2 whitespace-nowrap rounded bg-brand px-2 py-0.5 text-xs font-medium text-sobre-brand">Mejor opción</span>}
           </p>
           <p className="mt-1 text-sm">{o.resumen}</p>
-          {esMeta && <p className="mt-1 text-xs text-suave">Es una meta para negociar, no una oferta real de un banco.</p>}
+          {f && (
+            <p className="mt-1 text-xs text-suave">
+              Simulación informada por {nombreInstitucion(f.institucion)} al SERNAC (cargada el {formatFecha(f.fecha)}); {f.escalado ? `valores llevados a tu monto desde la simulación de ${formatCLP(f.montoBase)}` : "valores exactos del comparador"}.{" "}
+              <a href={f.url} target="_blank" rel="noopener noreferrer" className="font-medium text-brand underline">Ver fuente</a>
+            </p>
+          )}
         </div>
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-2 text-center text-sm sm:grid-cols-4">
@@ -51,13 +57,15 @@ export default function OpcionCard({ o, rango, actual }: { o: OpcionRenegociacio
         <div className="space-y-3 pt-2 text-sm">
           <p>Cada mes el banco cobra interés sobre lo que aún debes: <b>interés = lo que debes × la tasa</b>. Del resto de tu cuota, una parte baja tu deuda.
             Con una tasa menor pagas menos interés y tu deuda baja más rápido.</p>
-          {o.primerosMeses ? (
+          {o.tipo === "mercado" ? (
+            <p>La cuota, la tasa, el CAE y el costo total los informó la institución al SERNAC para un crédito de consumo. No son una oferta ni una aprobación: tu condición real depende de la evaluación de la institución. Cotiza en al menos tres.</p>
+          ) : o.primerosMeses ? (
             <div className="grid gap-4 lg:grid-cols-2">
               <TablaMeses titulo="Primeros meses: hoy" filas={actual.primerosMeses} />
               <TablaMeses titulo="Primeros meses: con esta opción" filas={o.primerosMeses} />
             </div>
           ) : (
-            <p>Comparamos pagar tu tarjeta en 24 meses a su tasa actual contra pagarla en 24 meses con un crédito a la tasa de esta opción.</p>
+            <p>Esta opción no tiene desglose mes a mes.</p>
           )}
           <p className="text-xs text-suave">Costo total con esta opción: {formatCLP(o.totalPagar)}. Hoy pagarías {formatCLP(actual.totalPagar)}. Diferencia: {formatCLP(o.ahorroTotal)}.</p>
         </div>

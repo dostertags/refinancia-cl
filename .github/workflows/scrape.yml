@@ -1,9 +1,0 @@
-name: Scrape diario SERNAC
-on:
-  schedule: [{cron: "0 7 * * *"}]
-  workflow_dispatch:
-jobs:
-  scrape:
-    runs-on: ubuntu-latest
-    steps:
-      - run: curl -fsS -X POST "${{ secrets.API_URL }}/api/admin/scrape" -H "X-Admin-Token: ${{ secrets.ADMIN_TOKEN }}"

@@ -9,9 +9,9 @@
 |---|---|---|
 | R1: deuda total ≤ 10× renta líquida | Definida en el enunciado del proyecto | **No verificada**: no consta como norma vigente; se trata como *criterio de la herramienta* |
 | R2: cuota total ≤ 25% de la renta | Definida en el enunciado del proyecto | **No verificada**: *criterio de la herramienta* |
-| R3: tarjetas amortizadas en ≤ 24 meses (NCG 537 CMF) | Enunciado; se cita la NCG N° 537 de la CMF | **No verificada**: la fórmula de cuota mínima (mayor entre amortización a 24 meses e intereses + comisiones) proviene de la especificación, no del texto de la norma |
+| R3: tarjetas en 24 meses | **Supuesto de la herramienta**. La NCG 537 (CMF, 2025) regula el pago mínimo (monto no financiable + 5 % del financiable), no un plazo de 24 meses | La atribución anterior a la NCG 537 era incorrecta y se eliminó |
 | R4: mostrar siempre CAE y CTC | Práctica de información al consumidor (SERNAC financiero) | Razonable; falta citar artículo exacto |
-| R5: retracto de 20 días corridos (Ley 20.555) | Enunciado | **No verificada**: el plazo y su aplicación a repactaciones deben confirmarse |
+| R5: aviso de retracto | El SERNAC informa 10 días en varios casos; el plazo depende del contrato | **No verificada** para repactaciones; ya no se afirma "20 días" |
 | R6: no es oferta de crédito; consentimiento expreso | Decisión de producto | Prudencia; no sustituye asesoría legal |
 | R7: plazo máx. 60 meses en consumo | Indicado por el dueño del proyecto | **No verificada**: puede ser práctica bancaria y no un tope legal |
 

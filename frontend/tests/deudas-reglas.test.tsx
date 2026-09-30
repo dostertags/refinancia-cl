@@ -148,7 +148,7 @@ const base: Resultado = {
   estado: "OK", fecha_calculo: "2026-09-29", renta_considerada: 1_500_000, situacion_actual: null, propuesta: null,
   tarjetas_amortizacion: [], analisis_una_deuda: null, reglas: [], alertas: [], sugerencias: [], mensajes: [],
   renta_minima_sugerida: null, fuente_ofertas: "sernac", aviso_ofertas: "Ofertas del SERNAC.",
-  disclaimer: "Esta simulación no constituye una oferta de crédito.", aviso_retracto: "Tienes 20 días corridos para retractarte.",
+  disclaimer: "Esta simulación no constituye una oferta de crédito.", aviso_retracto: "Sobre tu derecho a retracto: confirma en sernac.cl.",
   enlaces_oficiales: {}, supuestos: [], total_a_refinanciar: 0, partes_refinanciar: [], excluidas: [],
 };
 

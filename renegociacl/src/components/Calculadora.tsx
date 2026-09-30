@@ -4,7 +4,7 @@ import { cae, tasaMensualDesdeAnual } from "@/lib/amortizacion";
 import { codificarEstado, decodificarEstado, type EstadoCompartido } from "@/lib/compartir";
 import { resumenComparacion, type CreditoGuardado } from "@/lib/comparador";
 import { formatearMientrasEscribe, formatPct, parseCLP, parseTasa } from "@/lib/format";
-import { cargarMercado, MERCADO_VACIO, type EstadoMercado, type Mercado } from "@/lib/mercado";
+import { cargarMercado, type EstadoMercado, type Mercado } from "@/lib/mercado";
 import { generarOpciones, MAX_TARJETAS } from "@/lib/opciones";
 import type { Credito, Modo } from "@/lib/tipos";
 import Ayuda from "./Ayuda";
@@ -53,7 +53,8 @@ function FormularioCalculadora({ inicial }: { inicial: EstadoCompartido | null }
   const [ofertas, setOfertas] = useState<OfertaForm[]>((c0?.ofertas ?? []).map((o) => ({ nombre: o.nombre, tasa: tasaATexto(o.tasaMensual), gastos: dinero(o.gastos) })));
   const [abono, setAbono] = useState(dinero(c0?.abonoUnico));
   const [calculado, setCalculado] = useState<Credito | null>(c0 ?? null);
-  const [mercado, setMercado] = useState<{ estado: EstadoMercado | "cargando"; mercado: Mercado }>({ estado: "cargando", mercado: MERCADO_VACIO });
+  const [mercado, setMercado] = useState<{ estado: EstadoMercado | "cargando"; mercado: Mercado | null }>({ estado: "cargando", mercado: null });
+  const [seguro, setSeguro] = useState(true);
   const [guardados, setGuardados] = useState<CreditoGuardado[]>([]);
   const [copiado, setCopiado] = useState(false);
   const zonaResultados = useRef<HTMLDivElement>(null);
@@ -79,7 +80,7 @@ function FormularioCalculadora({ inicial }: { inicial: EstadoCompartido | null }
     };
   };
 
-  const resultado = useMemo(() => (calculado ? generarOpciones(calculado, modo) : null), [calculado, modo]);
+  const resultado = useMemo(() => (calculado ? generarOpciones(calculado, modo, mercado.mercado, { seguro }) : null), [calculado, modo, mercado.mercado, seguro]);
   const desactualizado = calculado !== null && canon(construir()) !== canon(calculado);
   const comparacion = useMemo(() => resumenComparacion(guardados), [guardados]);
 
@@ -166,6 +167,11 @@ function FormularioCalculadora({ inicial }: { inicial: EstadoCompartido | null }
             ))}
           </div>
         </fieldset>
+
+        <label className="flex min-h-11 cursor-pointer items-start gap-2 rounded-lg border border-borde p-3 text-sm">
+          <input type="checkbox" checked={seguro} onChange={(e) => setSeguro(e.target.checked)} className="mt-0.5 h-5 w-5" />
+          <span><b>Comparar con seguro de desgravamen</b> (como en el comparador del SERNAC). Sin seguro la cuota es menor, pero si quien pidió el crédito fallece o queda inválido, la deuda no se cubre.</span>
+        </label>
 
         <fieldset className="space-y-3 rounded-lg border border-borde p-3">
           <legend className="px-1 text-sm font-medium">Tarjetas de crédito (opcional)</legend>

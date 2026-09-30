@@ -40,6 +40,14 @@ def test_r3_cumple_en_caso_normal(perfil, deuda_factory, oferta_factory):
     assert next(x for x in r.reglas if x.regla == "R3").cumple is True
 
 
+def test_no_atribuye_a_la_cmf_un_plazo_de_24_meses_que_no_es_norma(perfil, deuda_factory, oferta_factory):
+    d = deuda_factory(tipo="tarjeta", monto_actual=2_000_000, tasa_mensual=0.03, cuota_actual=20_000, plazo_restante_meses=60)
+    r = simular(req(perfil, [d], [oferta_factory()]))
+    textos = " ".join(r.alertas + r.mensajes + [x.titulo + x.detalle for x in r.reglas])
+    assert "NCG 537" not in textos and "norma de la CMF" not in textos
+    assert any("supuesto" in x.titulo.lower() for x in r.reglas if x.regla == "R3")
+
+
 def test_alerta_si_cuota_actual_de_tarjeta_es_menor_que_el_minimo(perfil, deuda_factory, oferta_factory):
     d = deuda_factory(tipo="tarjeta", monto_actual=2_000_000, tasa_mensual=0.03, cuota_actual=20_000, plazo_restante_meses=60)
     r = simular(req(perfil, [d], [oferta_factory()]))

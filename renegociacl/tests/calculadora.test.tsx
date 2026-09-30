@@ -4,9 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Calculadora from "@/components/Calculadora";
 import Tema from "@/components/Tema";
 import { codificarEstado } from "@/lib/compartir";
+import subset from "./fixtures/rates-sernac-subset.json";
 
-const VACIO = { actualizado: null, fuente: "", ofertas: [] };
-const CON_TASAS = { actualizado: "2026-09-28", fuente: "SERNAC", ofertas: [{ institucion: "Banco Uno", tasaMensual: 0.012 }, { institucion: "Banco Dos", tasaMensual: 0.018 }] };
+const VACIO = { ...subset, simulaciones: [] };
+const CON_TASAS = subset;
 
 function mockRates(data: unknown, ok = true) {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok, json: async () => data }));
@@ -18,7 +19,7 @@ async function llenar(saldo = "3000000", cuota = "153000", tasa = "3") {
 }
 const calcular = () => userEvent.click(screen.getByRole("button", { name: /^calcular/i }));
 
-beforeEach(() => { mockRates(VACIO); window.location.hash = ""; });
+beforeEach(() => { mockRates(CON_TASAS); window.location.hash = ""; });
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Ingreso de datos", () => {
@@ -160,21 +161,55 @@ describe("Ofertas, tarjeta y abono", () => {
 });
 
 describe("Confianza: fuentes y estado de las tasas", () => {
-  it("sin tasas cargadas no inventa referencias", async () => {
+  it("sin tasas cargadas no inventa nada: solo opciones que no requieren renegociar", async () => {
+    mockRates(VACIO);
     render(<Calculadora />);
     await llenar();
     await calcular();
     expect(await screen.findByText(/aún no hay tasas de mercado cargadas/i)).toBeInTheDocument();
+    const items = within(screen.getByRole("list", { name: /opciones/i })).getAllByRole("listitem");
+    expect(items.every((li) => /sin renegociar|renegociar nada/i.test(li.textContent ?? ""))).toBe(true);
   });
-  it("con tasas cargadas muestra fuente y fecha de actualización", async () => {
-    mockRates(CON_TASAS);
+  it("muestra la tasa más competitiva del mercado con institución, fuente oficial y fecha", async () => {
     render(<Calculadora />);
     await llenar();
     await calcular();
-    const fuentes = await screen.findByRole("region", { name: /de dónde salen los números/i });
-    expect(fuentes).toHaveTextContent(/SERNAC/);
-    expect(fuentes).toHaveTextContent(/2026-09-28/);
-    expect(fuentes).toHaveTextContent(/Banco Uno/);
+    const r = await screen.findByRole("region", { name: /tasa más competitiva del mercado/i });
+    expect(r).toHaveTextContent(/1,19%/);
+    expect(r).toHaveTextContent(/Banco BICE/);
+    expect(r).toHaveTextContent(/SERNAC/);
+    expect(r).toHaveTextContent(/29-09-2026/);
+    expect(within(r).getByRole("link", { name: /sernac/i })).toHaveAttribute("href", expect.stringMatching(/^https:\/\/www\.sernac\.cl/));
+  });
+  it("cada opción de mercado nombra la institución y enlaza a la fuente", async () => {
+    render(<Calculadora />);
+    await llenar();
+    await calcular();
+    const primera = (await screen.findAllByRole("listitem"))[0];
+    expect(primera).toHaveTextContent(/Banco BICE/);
+    expect(primera).toHaveTextContent(/informada por .* al SERNAC/i);
+    expect(within(primera).getByRole("link", { name: /ver fuente/i })).toHaveAttribute("href", expect.stringContaining("sernac.cl"));
+  });
+  it("de dónde salen los números: fuente, fecha, aviso de simulaciones referenciales y nota del CAE", async () => {
+    render(<Calculadora />);
+    await llenar();
+    await calcular();
+    const f = await screen.findByRole("region", { name: /de dónde salen los números/i });
+    expect(f).toHaveTextContent(/SERNAC/);
+    expect(f).toHaveTextContent(/29-09-2026/);
+    expect(f).toHaveTextContent(/referenciales/i);
+    expect(f).toHaveTextContent(/cada institución/i);
+    expect(within(f).getByRole("link", { name: /comparador/i })).toBeInTheDocument();
+  });
+  it("por defecto compara con seguro de desgravamen y se puede quitar (cambian las cifras)", async () => {
+    render(<Calculadora />);
+    await llenar();
+    await calcular();
+    const antes = (await screen.findAllByRole("listitem"))[0].textContent;
+    const seguro = screen.getByLabelText(/con seguro de desgravamen/i);
+    expect(seguro).toBeChecked();
+    await userEvent.click(seguro);
+    expect(screen.getAllByRole("listitem")[0].textContent).not.toBe(antes);
   });
   it("si falla la carga lo dice y permite reintentar; la calculadora sigue funcionando", async () => {
     mockRates({}, false);
@@ -182,9 +217,10 @@ describe("Confianza: fuentes y estado de las tasas", () => {
     await llenar();
     await calcular();
     expect(await screen.findByText(/Te faltan/)).toBeInTheDocument();
+    expect(await screen.findByText(/no pudimos cargar las tasas de mercado/i)).toBeInTheDocument();
     mockRates(CON_TASAS);
     await userEvent.click(await screen.findByRole("button", { name: /reintentar/i }));
-    expect(await screen.findByText(/Banco Uno/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/Banco BICE/)).length).toBeGreaterThan(0);
   });
   it("muestra el aviso legal y no usa logos de bancos", async () => {
     render(<Calculadora />);

@@ -119,7 +119,7 @@ export default function StepDeudas({ inicial, opciones, onNext, onBack }: { inic
           <span><b>Menor cuota posible</b> — alivia tu mes; usa plazos más largos y puede costar más en total.</span></label>
         {objetivo === "cuota" && (
           <label className="ml-6 flex items-center gap-2 text-sm"><input type="checkbox" {...register("mas24")} />
-            Permitir tarjetas a más de 24 meses (baja más la cuota, pero excede el plazo de la NCG 537)</label>)}
+            Permitir tarjetas a más de 24 meses (baja más la cuota, pero supera los 24 meses que supone esta herramienta)</label>)}
       </Card>
       <p className="text-xs text-slate-600">Sin deudas, avanza igual: te mostraremos consejos de uso responsable del crédito.</p>
       <div className="flex gap-2">

@@ -1,9 +1,7 @@
 import os
-import tempfile
 
-# Aislar la BD de tests ANTES de importar la app (evita crear refinancia.db en el repo).
-_TMP = tempfile.mkdtemp(prefix="refinancia_test_")
-os.environ["DATABASE_URL"] = f"sqlite:///{_TMP}/test.db"
+# Datos de mercado de las pruebas: un subconjunto REAL del comparador del SERNAC (29-09-2026), fijo para que los tests sean estables.
+os.environ["SERNAC_DATA_PATH"] = os.path.join(os.path.dirname(__file__), "fixtures", "sernac_subset.json")
 os.environ.setdefault("RATE_LIMIT_PER_MIN", "1000")
 os.environ["ADMIN_TOKEN"] = "token-de-prueba"
 os.environ.pop("REDIS_URL", None)

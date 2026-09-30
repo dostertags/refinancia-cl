@@ -177,10 +177,10 @@ describe("ofertas y avisos honestos", () => {
     expect(r.avisos.join(" ")).toMatch(/Caro/);
     expect(r.avisos.join(" ")).toMatch(/no mejora tu tasa/i);
   });
-  it("con una oferta real, ninguna opción es hipotética (salvo abono)", () => {
+  it("las opciones con nombre de banco parten de una oferta real ingresada (nunca de una meta inventada)", () => {
     const r = generarOpciones({ saldo: 3_000_000, cuota: 153_000, tasaMensual: 0.03, ofertas: [{ nombre: "Banco", tasaMensual: 0.015 }] }, "intereses");
     if (!r.ok) throw new Error("ok");
-    expect(r.opciones.filter((o) => o.tipo !== "abono").every((o) => !o.esHipotetica)).toBe(true);
+    expect(r.opciones.filter((o) => o.tipo === "tasa").every((o) => o.esPropia && o.titulo.includes("Banco"))).toBe(true);
   });
 });
 

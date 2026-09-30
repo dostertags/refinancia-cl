@@ -3,9 +3,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-# Chromium solo si se va a scrapear (imagen más pesada). docker build --build-arg INSTALL_PLAYWRIGHT=1 .
-ARG INSTALL_PLAYWRIGHT=0
-RUN if [ "$INSTALL_PLAYWRIGHT" = "1" ]; then playwright install --with-deps chromium; fi
 COPY app ./app
 RUN useradd -m app && chown -R app /app
 USER app

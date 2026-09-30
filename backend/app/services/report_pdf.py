@@ -97,7 +97,7 @@ def generar_informe(res: ResultadoSimulacion, url_qr: str = "https://refinancia.
             "y exige los certificados de deuda pagada. 4) Guarda los contratos y revisa tu derecho a retracto.", body)]
 
     if res.tarjetas_amortizacion:
-        s += [Paragraph("Tarjetas: amortización forzosa a 24 meses (NCG 537)", h2), _tabla(
+        s += [Paragraph("Tarjetas: pago a 24 meses (supuesto de esta herramienta)", h2), _tabla(
             [["Tarjeta", "Saldo", "Plazo", "Cuota"]] + [[t.institucion, clp(t.saldo), f"{t.plazo_meses} m", clp(t.cuota)] for t in res.tarjetas_amortizacion])]
     if res.sugerencias:
         s.append(Paragraph("Sugerencias", h2))

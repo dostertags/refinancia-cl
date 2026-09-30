@@ -2,6 +2,14 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.4.0] — Tasas de mercado reales y auditoría de cifras
+
+- **Se eliminó la tasa "0,97 % mensual"**: era una meta hipotética sin fuente. Ya no se inventan tasas.
+- Las tasas de mercado vienen del comparador oficial del SERNAC (870 simulaciones, 13 instituciones), con fuente, fecha y enlace visibles; se destaca la tasa más competitiva y se ordena por CTC.
+- Nuevo scraper `sernac_powerbi` (una petición HTTP) y flujo `tasas.yml`. Se quitaron Playwright, base de datos, Redis y las ofertas de ejemplo.
+- Afirmaciones legales corregidas: "24 meses NCG 537" es un supuesto de la herramienta; retracto sin "20 días"; 10× renta y 25 % son criterios de la herramienta. Ver `docs/CIFRAS.md`.
+- RenegociaCL abre en modo oscuro por defecto.
+
 ## [0.3.0] — Tasa opcional y tarjetas que se suman al refinanciamiento
 
 Aplica a los dos proyectos (RenegociaCL y RefinanciaCL).
