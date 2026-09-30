@@ -84,15 +84,19 @@ describe("Resultado", () => {
     const tiempo = screen.getByRole("region", { name: /cuándo terminas de pagar/i });
     expect(within(tiempo).getAllByText(/\d+ meses?/).length).toBeGreaterThanOrEqual(4);
   });
-  it("cada opción muestra paso a paso cómo se calcula (primeros meses, hoy vs. opción)", async () => {
+  it("cada opción muestra el cálculo COMPLETO mes a mes (hoy vs. opción) con totales", async () => {
     render(<Calculadora />);
     await llenar();
     await calcular();
     const primera = (await screen.findAllByText(/ver cómo se calcula/i))[0];
     await userEvent.click(primera);
-    const tablas = screen.getAllByRole("table", { name: /primeros meses/i });
-    expect(tablas.length).toBeGreaterThanOrEqual(2);
-    expect(within(tablas[0]).getByText(/interés/i)).toBeInTheDocument();
+    const hoy = screen.getByRole("table", { name: /hoy, sin cambiar nada/i });
+    const nueva = screen.getAllByRole("table", { name: /con esta opción/i })[0];
+    expect(within(hoy).getByText(/interés/i)).toBeInTheDocument();
+    // Una fila por mes (más encabezado y total): nada truncado.
+    const meses = Number(/\((\d+) meses?\)/.exec(hoy.querySelector("caption")!.textContent!)![1]);
+    expect(within(hoy).getAllByRole("row")).toHaveLength(meses + 2);
+    expect(within(nueva).getByRole("row", { name: /total/i })).toBeInTheDocument();
   });
   it("si la cuota no cubre los intereses da un error claro", async () => {
     render(<Calculadora />);
@@ -103,7 +107,7 @@ describe("Resultado", () => {
   it("pide datos si faltan", async () => {
     render(<Calculadora />);
     await calcular();
-    expect(await screen.findByRole("alert")).toHaveTextContent(/saldo/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/crédito de consumo.*tarjeta/i);
   });
   it("crédito al 0%: explica que no hay nada que renegociar", async () => {
     render(<Calculadora />);
@@ -399,7 +403,7 @@ describe("Tarjetas: se suman al total a refinanciar", () => {
     await llenar();
     await agregarTarjeta("Ripley", "2000000");
     await calcular();
-    expect(await screen.findByText(/Ripley.*necesito su pago mensual o su tasa/i)).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Ripley.*pago mensual o su tasa/i);
   });
   it("con pago mensual y sin tasa, dice qué se supuso", async () => {
     render(<Calculadora />);
@@ -415,7 +419,34 @@ describe("Tarjetas: se suman al total a refinanciar", () => {
     await userEvent.click(screen.getByRole("button", { name: /agregar tarjeta/i }));
     await userEvent.type(screen.getAllByLabelText(/pago mensual de esta tarjeta/i)[0], "100000");
     await calcular();
-    expect(await screen.findByText(/necesito el total que debes/i)).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Tu tarjeta.*cuánto debes en ella/i);
+  });
+  it("solo con una tarjeta (sin crédito de consumo) la tarjeta entra al total a refinanciar", async () => {
+    render(<Calculadora />);
+    await agregarTarjeta("Falabella", "2000000", { pago: "100000" });
+    await calcular();
+    const r = await screen.findByRole("region", { name: /deuda a refinanciar/i });
+    expect(r).toHaveTextContent("$2.000.000");
+    expect(r).toHaveTextContent(/Falabella/);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText(/hoy pagas/i)).toHaveTextContent("$100.000");
+  });
+  it("con tarjeta, los campos del crédito dicen que son opcionales; sin tarjeta, obligatorios", async () => {
+    render(<Calculadora />);
+    expect(screen.getByLabelText(/tu cuota mensual/i)).toHaveAccessibleDescription(/^Obligatorio/);
+    await userEvent.click(screen.getByRole("button", { name: /agregar tarjeta/i }));
+    expect(screen.getByLabelText(/tu cuota mensual/i)).toHaveAccessibleDescription(/Opcional si agregas tarjeta/);
+  });
+  it("crédito + 2 tarjetas: el total a refinanciar es la suma exacta y cada una aparece en el desglose", async () => {
+    render(<Calculadora />);
+    await llenar();
+    await agregarTarjeta("Falabella", "2000000", { pago: "100000" }, 0);
+    await agregarTarjeta("Ripley", "1500000", { tasa: "3,2" }, 1);
+    await calcular();
+    const r = await screen.findByRole("region", { name: /deuda a refinanciar/i });
+    expect(r).toHaveTextContent("$6.500.000");
+    expect(r).toHaveTextContent(/Falabella.*\$2\.000\.000/);
+    expect(r).toHaveTextContent(/Ripley.*\$1\.500\.000/);
   });
   it("las tarjetas viajan en el enlace compartido y se recuperan", async () => {
     window.location.hash = "#d=" + codificarEstado({ credito: { saldo: 3_000_000, cuota: 153_000, mesesRestantes: 31,

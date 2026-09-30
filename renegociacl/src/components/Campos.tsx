@@ -29,7 +29,7 @@ export function Campo({ etiqueta, valor, onCambio, placeholder, modo = "numeric"
 
 /** Etiqueta visible (y leída por lectores de pantalla) que dice si un dato es obligatorio u opcional. */
 export function Insignia({ id, texto }: { id: string; texto: string }) {
-  const opcional = texto.toLowerCase() === "opcional";
+  const opcional = texto.toLowerCase().startsWith("opcional");
   return (
     <span id={id} className={`ml-2 whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-semibold ${opcional ? "bg-superficie-2 text-suave" : "bg-brand-fondo text-brand"}`}>
       {texto}

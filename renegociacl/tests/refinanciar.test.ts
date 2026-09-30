@@ -114,26 +114,26 @@ describe("tarjetas: tasa o pago mensual, al menos uno", () => {
     expect(r.supuestos.join(" ")).toMatch(/24 meses/);
     expect(r.actual.cuotaTotal).toBe(153_000 + Math.ceil(cuotaFrancesa(2_000_000, 0.035, 24)));
   });
-  it("solo saldo: no inventa nada, explica qué falta y sigue con el crédito", () => {
-    const r = ok(generarOpciones({ ...base, tarjetas: [{ nombre: "Ripley", saldo: 2_000_000 }] }, "intereses"));
-    expect(r.avisos.join(" ")).toMatch(/Ripley.*necesito su pago mensual o su tasa/i);
-    expect(r.refinanciar.total).toBe(3_000_000);
-    expect(r.actual.cuotaTotal).toBe(153_000);
+  const err = (r: Resultado): string => { if (r.ok) throw new Error("se esperaba un error"); return r.error; };
+  it("solo saldo: no la ignora en silencio, dice qué falta", () => {
+    expect(err(generarOpciones({ ...base, tarjetas: [{ nombre: "Ripley", saldo: 2_000_000 }] }, "intereses"))).toMatch(/Ripley.*pago mensual o su tasa/i);
   });
   it("pago que no alcanza a pagarla en 24 meses y sin tasa: pide la tasa", () => {
-    const r = ok(generarOpciones({ ...base, tarjetas: [{ nombre: "Ripley", saldo: 2_000_000, pagoMensual: 30_000 }] }, "intereses"));
-    expect(r.avisos.join(" ")).toMatch(/Ripley.*necesito su tasa/i);
-    expect(r.refinanciar.total).toBe(3_000_000);
+    expect(err(generarOpciones({ ...base, tarjetas: [{ nombre: "Ripley", saldo: 2_000_000, pagoMensual: 30_000 }] }, "intereses"))).toMatch(/Ripley.*tasa/i);
   });
-  it("pago que no cubre ni los intereses (con tasa dada): la deja fuera y avisa", () => {
-    const r = ok(generarOpciones({ ...base, tarjetas: [{ nombre: "Ripley", saldo: 2_000_000, pagoMensual: 20_000, tasaMensual: 0.035 }] }, "intereses"));
-    expect(r.avisos.join(" ")).toMatch(/Ripley.*no alcanza/i);
-    expect(r.refinanciar.total).toBe(3_000_000);
+  it("pago que no cubre ni los intereses (con tasa dada): error claro con las cifras", () => {
+    expect(err(generarOpciones({ ...base, tarjetas: [{ nombre: "Ripley", saldo: 2_000_000, pagoMensual: 20_000, tasaMensual: 0.035 }] }, "intereses"))).toMatch(/Ripley.*no alcanza.*\$70\.000/i);
   });
-  it("datos de tarjeta sin saldo: avisa que falta el total que debe", () => {
-    const r = ok(generarOpciones({ ...base, tarjetas: [{ nombre: "Ripley", pagoMensual: 50_000 }] }, "intereses"));
-    expect(r.avisos.join(" ")).toMatch(/Ripley.*necesito el total que debes/i);
-    expect(r.refinanciar.total).toBe(3_000_000);
+  it("datos de tarjeta sin saldo: pide el total que debe", () => {
+    expect(err(generarOpciones({ ...base, tarjetas: [{ nombre: "Ripley", pagoMensual: 50_000 }] }, "intereses"))).toMatch(/Ripley.*cuánto debes/i);
+  });
+  it("tasa de tarjeta fuera de rango: error (no se ignora)", () => {
+    expect(err(generarOpciones({ ...base, tarjetas: [{ nombre: "Ripley", saldo: 2_000_000, tasaMensual: 0.5 }] }, "intereses"))).toMatch(/Ripley.*revisa la tasa/i);
+  });
+  it("varias tarjetas con problemas: los lista todos", () => {
+    const e = err(generarOpciones({ ...base, tarjetas: [{ saldo: 500_000 }, { saldo: 700_000 }] }, "intereses"));
+    expect(e).toMatch(/Tarjeta 1/);
+    expect(e).toMatch(/Tarjeta 2/);
   });
   it("saldo 0 o vacío se ignora sin ruido", () => {
     const r = ok(generarOpciones({ ...base, tarjetas: [{ saldo: 0 }, { saldo: NaN }] }, "intereses", M));
@@ -148,7 +148,7 @@ describe("hasta 3 tarjetas", () => {
   it("una cuarta se ignora y se avisa el máximo", () => {
     const r = ok(generarOpciones({ ...base, tarjetas: [t(1), t(2), t(3), t(4)] }, "intereses"));
     expect(r.refinanciar.total).toBe(4_500_000);
-    expect(r.avisos.join(" ")).toMatch(/máximo de 3/i);
+    expect(r.avisos.join(" ")).toMatch(/hasta 3 tarjetas/i);
   });
   it("con varias, los nombres por defecto son Tarjeta 1, 2, 3", () => {
     const r = ok(generarOpciones({ ...base, tarjetas: [{ saldo: 500_000, pagoMensual: 30_000 }, { saldo: 600_000, pagoMensual: 40_000 }] }, "intereses"));
@@ -168,5 +168,60 @@ describe("meses restantes + tarjeta + oferta real (caso completo)", () => {
     expect(r.opciones[0].gastos).toBe(80_000);
     expect(r.opciones[0].ahorroTotal).toBeGreaterThan(0);
     expect(r.supuestos.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+
+describe("solo tarjetas (sin crédito de consumo)", () => {
+  const soloTarjeta = (extra: Partial<Credito> = {}): Credito => ({ tarjetas: [{ nombre: "Falabella", saldo: 2_000_000, pagoMensual: 100_000 }], ...extra });
+  it("la tarjeta se acepta y es todo el total a refinanciar", () => {
+    const r = ok(generarOpciones(soloTarjeta(), "intereses", M));
+    expect(r.refinanciar.total).toBe(2_000_000);
+    expect(r.refinanciar.partes).toEqual([{ nombre: "Falabella", saldo: 2_000_000 }]);
+    expect(r.actual.cuotaTotal).toBe(100_000);
+  });
+  it("saldo 0 y cuota 0 (campos vacíos del formulario) cuentan como 'sin crédito'", () => {
+    const r = ok(generarOpciones({ saldo: 0, cuota: 0, tarjetas: soloTarjeta().tarjetas }, "intereses", M));
+    expect(r.refinanciar.total).toBe(2_000_000);
+  });
+  it("sin crédito y sin tarjetas: error que explica las dos formas de empezar", () => {
+    const r = generarOpciones({ saldo: 0, cuota: 0 }, "intereses");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toMatch(/crédito de consumo.*tarjeta/i);
+  });
+  it("crédito a medias (solo saldo) sigue siendo error aunque haya tarjeta", () => {
+    const r = generarOpciones(soloTarjeta({ saldo: 3_000_000 }), "intereses");
+    expect(r.ok).toBe(false);
+  });
+  it("el abono único no se usa sin crédito, y lo avisa", () => {
+    const r = ok(generarOpciones(soloTarjeta({ abonoUnico: 300_000 }), "intereses", M));
+    expect(r.avisos.join(" ")).toMatch(/abono.*crédito de consumo/i);
+    expect(r.opciones.some((o) => o.tipo === "abono" || o.tipo === "abonoUnico")).toBe(false);
+  });
+  it("si desmarcas todas las tarjetas no hay nada que refinanciar (sin dividir por cero)", () => {
+    const r = ok(generarOpciones({ tarjetas: [{ saldo: 2_000_000, pagoMensual: 100_000, incluir: false }] }, "intereses", M));
+    expect(r.refinanciar.total).toBe(0);
+    expect(r.opciones).toEqual([]);
+    expect(r.nota).toMatch(/nada que refinanciar/i);
+    expect(JSON.stringify(r)).not.toMatch(/NaN|Infinity/);
+  });
+});
+
+describe("el cálculo se ve completo", () => {
+  it("cada opción propia trae TODOS los meses y suman lo que dice el costo total", () => {
+    const r = ok(generarOpciones({ ...base, tarjetas: [{ saldo: 1_500_000, pagoMensual: 90_000 }], ofertas: [{ nombre: "Banco X", tasaMensual: 0.012, gastos: 50_000 }] }, "intereses"));
+    const propias = r.opciones.filter((o) => o.esPropia);
+    expect(propias.length).toBeGreaterThan(0);
+    for (const o of propias) {
+      expect(o.calendario!.length).toBe(o.nuevosMeses);
+      const pagado = o.calendario!.reduce((a, f) => a + f.pago + f.abono, 0);
+      expect(Math.abs(pagado + o.gastos - o.totalPagar)).toBeLessThan(1);
+    }
+    expect(r.actual.calendario.length).toBe(r.actual.meses);
+  });
+  it("el calendario de 'hoy' suma lo que dice 'si sigues como estás'", () => {
+    const r = ok(generarOpciones({ ...base, tarjetas: [{ saldo: 1_500_000, pagoMensual: 90_000 }] }, "intereses"));
+    const pagado = r.actual.calendario.reduce((a, f) => a + f.pago + f.abono, 0);
+    expect(Math.abs(pagado - r.actual.totalPagar)).toBeLessThan(1);
   });
 });

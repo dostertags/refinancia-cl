@@ -2,6 +2,12 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.4.1] — Tarjetas y cálculo completo (RenegociaCL)
+
+- Se puede calcular solo con tarjetas (sin crédito de consumo). Una tarjeta incompleta ya no se ignora: se muestra un error que dice qué falta.
+- "Ver cómo se calcula" muestra todos los meses con totales; las opciones del SERNAC traen el desglose capital + intereses + comisiones + seguros.
+- El titular de la tasa más competitiva coincide con el rango publicado. Nuevo barrido de 1.500 casos de consistencia (254 tests).
+
 ## [0.4.0] — Tasas de mercado reales y auditoría de cifras
 
 - **Se eliminó la tasa "0,97 % mensual"**: era una meta hipotética sin fuente. Ya no se inventan tasas.

@@ -6,8 +6,9 @@
 // No se inventan tasas ni "metas de negociación". Sin datos de mercado ni ofertas, solo quedan opciones que no requieren renegociar.
 //
 // Reglas de entrada (acordadas):
-//  · Crédito: saldo y cuota obligatorios + (tasa o meses restantes: al menos uno; se calcula el que falte).
+//  · Crédito: saldo y cuota obligatorios + (tasa o meses restantes: al menos uno; se calcula el que falte). Puede faltar entero si hay tarjetas.
 //  · Tarjetas (hasta 3): saldo obligatorio + (pago mensual o tasa: al menos uno). Cada una se puede incluir o no en el refinanciamiento.
+//  · Una tarjeta a medio llenar NO se ignora en silencio: se devuelve un error que dice qué falta.
 //  · Total a refinanciar = crédito + tarjetas incluidas. Lo que queda fuera sigue pagándose igual y cuenta en "hoy" y en la nueva cuota.
 import {
   cae, caeDesdePagos, costoMismoPlazo, costoPlazoFijo, cuotaFrancesa, simularPago, sumarTablas, tablaAmortizacion, tasaDesdeMeses,
@@ -41,14 +42,21 @@ const deDatos = (nombre: string, esTarjeta: boolean, incluir: boolean, saldo: nu
   return { nombre, esTarjeta, incluir, saldo, pago, tasa, meses: tabla.length, total: tabla.reduce((a, f) => a + f.pago + f.abono, 0), tabla };
 };
 
-type ResCredito = { ok: true; d: Deuda; supuestos: string[]; avisos: string[] } | { ok: false; error: string };
+type ResCredito = { ok: true; d: Deuda | null; supuestos: string[]; avisos: string[] } | { ok: false; error: string };
+
+const vacio = (v: number | undefined): boolean => v === undefined || Number.isNaN(v) || v === 0;
+
+/** Sin ningún dato del crédito de consumo (la persona solo trae tarjetas). */
+const sinCredito = (c: Credito): boolean => vacio(c.saldo) && vacio(c.cuota) && c.tasaMensual === undefined && vacio(c.mesesRestantes);
 
 function resolverCredito(c: Credito): ResCredito {
-  if (!positivo(c.saldo) || !positivo(c.cuota)) return { ok: false, error: "Ingresa el saldo que debes y tu cuota mensual." };
+  if (sinCredito(c)) return { ok: true, d: null, supuestos: [], avisos: [] };
+  const saldo = c.saldo, cuota = c.cuota;
+  if (!positivo(saldo) || !positivo(cuota)) return { ok: false, error: "Crédito de consumo: escribe cuánto debes y tu cuota mensual (si no tienes un crédito de consumo, deja esos campos vacíos y agrega una tarjeta)." };
   const hayTasa = typeof c.tasaMensual === "number" && !Number.isNaN(c.tasaMensual);
   const hayMeses = positivo(c.mesesRestantes);
   if (!hayTasa && !hayMeses) {
-    return { ok: false, error: "Necesito la tasa de interés o los meses que te faltan (con una de las dos basta)." };
+    return { ok: false, error: "Crédito de consumo: necesito la tasa de interés o los meses que te faltan (con una de las dos basta)." };
   }
   const supuestos: string[] = [], avisos: string[] = [];
   let tasa: number;
@@ -56,16 +64,16 @@ function resolverCredito(c: Credito): ResCredito {
     if (!tasaValida(c.tasaMensual)) return { ok: false, error: "Revisa la tasa de interés: escríbela en %, por ejemplo 2,1 al mes (entre 0% y 20% mensual)." };
     tasa = c.tasaMensual;
   } else {
-    const t = tasaDesdeMeses(c.saldo, c.cuota, c.mesesRestantes as number);
+    const t = tasaDesdeMeses(saldo, cuota, c.mesesRestantes as number);
     if (t === null) {
       return { ok: false, error: "Con esa cuota y esos meses no alcanzas a pagar el saldo (o la tasa saldría absurda). Revisa el saldo, la cuota y los meses que te faltan." };
     }
     tasa = t;
     supuestos.push(`Calculamos tu tasa a partir de los meses que te faltan: ${pct(t)} al mes.`);
   }
-  const d = deDatos("Tu crédito", false, true, c.saldo, c.cuota, tasa);
+  const d = deDatos("Tu crédito", false, true, saldo, cuota, tasa);
   if (!d) {
-    return { ok: false, error: `Tu cuota (${formatCLP(c.cuota)}) no alcanza ni para pagar los intereses de un mes (${formatCLP(c.saldo * tasa)}): con esos datos la deuda nunca baja. Revisa el saldo, la cuota y la tasa.` };
+    return { ok: false, error: `Tu cuota (${formatCLP(cuota)}) no alcanza ni para pagar los intereses de un mes (${formatCLP(saldo * tasa)}): con esos datos la deuda nunca baja. Revisa el saldo, la cuota y la tasa.` };
   }
   if (hayTasa && hayMeses) {
     const m = c.mesesRestantes as number;
@@ -76,35 +84,39 @@ function resolverCredito(c: Credito): ResCredito {
   return { ok: true, d, supuestos, avisos };
 }
 
-/** Resuelve una tarjeta. Devuelve la deuda (o un aviso de por qué no se pudo) y el supuesto que se hizo, si lo hubo. */
-function resolverTarjeta(t: TarjetaEntrada, i: number, total: number): { d?: Deuda; aviso?: string; supuesto?: string } {
-  const nombre = t.nombre?.trim() || (total === 1 ? "Tu tarjeta" : `Tarjeta ${i + 1}`);
-  const saldo = t.saldo as number;
+type ResTarjeta = { ok: true; d: Deuda; supuesto?: string } | { ok: false; error: string };
+
+/** Resuelve una tarjeta con datos. Si falta algo o no calza, dice exactamente qué corregir (nunca se descarta en silencio). */
+function resolverTarjeta(t: TarjetaEntrada, nombre: string): ResTarjeta {
+  const saldo = t.saldo;
+  if (!positivo(saldo)) return { ok: false, error: `${nombre}: escribe cuánto debes en ella (es obligatorio).` };
+  const hayTasa = typeof t.tasaMensual === "number" && !Number.isNaN(t.tasaMensual);
+  if (hayTasa && !tasaValida(t.tasaMensual)) return { ok: false, error: `${nombre}: revisa la tasa, escríbela en % mensual (entre 0% y 20%), por ejemplo 3,5.` };
   const pago = positivo(t.pagoMensual) ? t.pagoMensual : undefined;
-  const tasa = tasaValida(t.tasaMensual) ? t.tasaMensual : undefined;
+  const tasa = hayTasa ? t.tasaMensual : undefined;
   const incluir = t.incluir !== false;
   if (pago !== undefined && tasa !== undefined) {
     const d = deDatos(nombre, true, incluir, saldo, pago, tasa);
-    return d ? { d } : { aviso: `El pago de ${nombre} no alcanza ni para pagar sus intereses, así que la dejamos fuera de los cálculos. Revisa el pago y la tasa.` };
+    return d ? { ok: true, d } : { ok: false, error: `${nombre}: el pago de ${formatCLP(pago)} no alcanza ni para pagar los intereses de un mes (${formatCLP(saldo * tasa)}). Revisa el pago y la tasa.` };
   }
   if (pago !== undefined) {
     const imp = tasaDesdeMeses(saldo, pago, TARJETA_MESES);
-    if (imp === null) return { aviso: `Con ese pago ${nombre} no se termina de pagar en ${TARJETA_MESES} meses: necesito su tasa para calcularla. Por ahora la dejamos fuera de los cálculos.` };
+    if (imp === null) return { ok: false, error: `${nombre}: con un pago de ${formatCLP(pago)} no se termina de pagar ${formatCLP(saldo)} en ${TARJETA_MESES} meses, así que no puedo calcular su tasa. Escribe la tasa de la tarjeta o sube el pago.` };
     const d = deDatos(nombre, true, incluir, saldo, pago, imp);
-    return d ? { d, supuesto: `Para ${nombre} supusimos que se paga en ${TARJETA_MESES} meses y calculamos su tasa: ${pct(imp)} al mes.` } : { aviso: `No pudimos calcular ${nombre}: revisa su saldo y su pago.` };
+    return d ? { ok: true, d, supuesto: `Para ${nombre} supusimos que se paga en ${TARJETA_MESES} meses y calculamos su tasa: ${pct(imp)} al mes.` } : { ok: false, error: `${nombre}: revisa su saldo y su pago.` };
   }
   if (tasa !== undefined) {
     const p = Math.ceil(cuotaFrancesa(saldo, tasa, TARJETA_MESES) - 1e-6);
     const d = deDatos(nombre, true, incluir, saldo, p, tasa);
-    return d ? { d, supuesto: `Para ${nombre} supusimos que se paga en ${TARJETA_MESES} meses: un pago de ${formatCLP(p)} al mes.` } : { aviso: `No pudimos calcular ${nombre}: revisa su saldo y su tasa.` };
+    return d ? { ok: true, d, supuesto: `Para ${nombre} supusimos que se paga en ${TARJETA_MESES} meses: un pago de ${formatCLP(p)} al mes.` } : { ok: false, error: `${nombre}: revisa su saldo y su tasa.` };
   }
-  return { aviso: `Para incluir ${nombre} necesito su pago mensual o su tasa (con una de las dos basta). Por ahora la dejamos fuera de los cálculos.` };
+  return { ok: false, error: `${nombre}: escribe su pago mensual o su tasa (con una de las dos basta).` };
 }
 
 interface Meta { tasa: number; gastos: number; nombre: string }
 interface Base {
   id: string; tipo: TipoOpcion; titulo: string; tasaMensual: number; nuevaCuota: number; nuevosMeses: number;
-  totalPagar: number; gastos: number; esPropia: boolean; caeAnual: number; primerosMeses?: FilaAmortizacion[];
+  totalPagar: number; gastos: number; esPropia: boolean; caeAnual: number; primerosMeses?: FilaAmortizacion[]; calendario?: FilaAmortizacion[]; desglose?: OpcionRenegociacion["desglose"];
   fuente?: OpcionRenegociacion["fuente"];
 }
 
@@ -157,22 +169,21 @@ export function generarOpciones(e: Credito, modo: Modo, mercado: Mercado | null 
   const supuestos = [...rc.supuestos];
   const avisos = [...rc.avisos];
 
-  // Tarjetas: se ignoran las vacías, se consideran hasta 3 y cada una debe traer sus datos mínimos.
-  (e.tarjetas ?? []).forEach((t, i) => {
-    if (!positivo(t.saldo) && (positivo(t.pagoMensual) || tasaValida(t.tasaMensual))) {
-      avisos.push(`Para incluir ${t.nombre?.trim() || `Tarjeta ${i + 1}`} necesito el total que debes en ella. Por ahora la dejamos fuera de los cálculos.`);
-    }
-  });
-  const candidatas = (e.tarjetas ?? []).filter((t) => positivo(t.saldo));
-  if (candidatas.length > MAX_TARJETAS) avisos.push(`Consideramos hasta 3 tarjetas (máximo de 3): las demás quedaron fuera.`);
-  const tarjetas = candidatas.slice(0, MAX_TARJETAS);
-  const deudas: Deuda[] = [rc.d];
+  // Tarjetas: las filas totalmente vacías se ignoran; toda tarjeta con algún dato debe estar completa (si no, error que dice qué falta).
+  const conDatos = (e.tarjetas ?? []).filter((t) => positivo(t.saldo) || positivo(t.pagoMensual) || (typeof t.tasaMensual === "number" && !Number.isNaN(t.tasaMensual)));
+  if (conDatos.length > MAX_TARJETAS) avisos.push(`Consideramos hasta ${MAX_TARJETAS} tarjetas: las demás quedaron fuera.`);
+  const tarjetas = conDatos.slice(0, MAX_TARJETAS);
+  const deudas: Deuda[] = rc.d ? [rc.d] : [];
+  const errores: string[] = [];
   tarjetas.forEach((t, i) => {
-    const r = resolverTarjeta(t, i, tarjetas.length);
-    if (r.aviso) avisos.push(r.aviso);
+    const r = resolverTarjeta(t, t.nombre?.trim() || (tarjetas.length === 1 ? "Tu tarjeta" : `Tarjeta ${i + 1}`));
+    if (!r.ok) { errores.push(r.error); return; }
     if (r.supuesto) supuestos.push(r.supuesto);
-    if (r.d) deudas.push(r.d);
+    deudas.push(r.d);
   });
+  if (errores.length > 0) return { ok: false, error: errores.join("\n") };
+  if (deudas.length === 0) return { ok: false, error: "Escribe tu crédito de consumo (deuda, cuota y tasa o meses) o, al menos, una tarjeta de crédito (deuda y pago mensual o tasa)." };
+  if (!rc.d && positivo(e.abonoUnico)) avisos.push("El abono de una sola vez se aplica a un crédito de consumo; sin crédito no lo usamos.");
 
   // Situación de hoy: TODAS las deudas consideradas, se refinancien o no.
   const saldoTodas = suma(deudas.map((d) => d.saldo));
@@ -180,8 +191,9 @@ export function generarOpciones(e: Credito, modo: Modo, mercado: Mercado | null 
   const actual: Actual = {
     meses: Math.max(...deudas.map((d) => d.meses)), totalPagar: totalHoy, intereses: totalHoy - saldoTodas,
     caeAnual: suma(deudas.map((d) => d.saldo * cae(d.tasa))) / saldoTodas, cuotaTotal: suma(deudas.map((d) => d.pago)),
-    primerosMeses: sumarTablas(deudas.map((d) => d.tabla)).slice(0, 3),
+    primerosMeses: [], calendario: sumarTablas(deudas.map((d) => d.tabla)),
   };
+  actual.primerosMeses = actual.calendario.slice(0, 3);
 
   const inc = deudas.filter((d) => d.incluir);
   const exc = deudas.filter((d) => !d.incluir);
@@ -192,6 +204,10 @@ export function generarOpciones(e: Credito, modo: Modo, mercado: Mercado | null 
   for (const o of e.ofertas ?? []) if (o.tasaMensual > 0) comparacion.push({ nombre: o.nombre || "Otra oferta", tasaMensual: o.tasaMensual, caeAnual: cae(o.tasaMensual) });
 
   const P = refinanciar.total;
+  if (P === 0) {
+    return { ok: true, actual, opciones: [], comparacion, avisos, supuestos, refinanciar, mercado: null,
+      nota: "Desmarcaste todas tus deudas, así que no hay nada que refinanciar. Marca \"Incluir en el refinanciamiento\" en al menos una para ver opciones." };
+  }
   const seguro = opts.seguro ?? true;
   const resumenMercado = resumirMercado(mercado, { monto: P, seguro });
   const tasaProm = suma(inc.map((d) => d.saldo * d.tasa)) / P;
@@ -220,9 +236,10 @@ export function generarOpciones(e: Credito, modo: Modo, mercado: Mercado | null 
   /** Arma una opción de crédito nuevo por `P` (lo incluido) más lo que queda fuera. */
   const conCreditoNuevo = (id: string, tipo: TipoOpcion, titulo: string, m: Meta, cuotaNueva: number, mesesNuevo: number, totalNuevo: number): OpcionRenegociacion => {
     const tabla = tablaAmortizacion(P, m.tasa, cuotaNueva);
+    const calendario = tabla ? sumarTablas([tabla, ...tablaFija]) : undefined;
     return armar({ id, tipo, titulo, tasaMensual: m.tasa, nuevaCuota: cuotaNueva + fijaPago, nuevosMeses: Math.max(mesesNuevo, fijaMeses),
       totalPagar: totalNuevo + m.gastos + fijaTotal, gastos: m.gastos, esPropia: true,
-      caeAnual: caeDeSimulacion(P, m.gastos, m.tasa, cuotaNueva), primerosMeses: tabla ? sumarTablas([tabla, ...tablaFija]).slice(0, 3) : undefined }, actual);
+      caeAnual: caeDeSimulacion(P, m.gastos, m.tasa, cuotaNueva), primerosMeses: calendario?.slice(0, 3), calendario }, actual);
   };
 
   const cand: OpcionRenegociacion[] = [];
@@ -247,6 +264,7 @@ export function generarOpciones(e: Credito, modo: Modo, mercado: Mercado | null 
       id: `mercado-${o.cuotas}`, tipo: "mercado", tasaMensual: o.tasaMensual, nuevaCuota: o.cuota + fijaPago, nuevosMeses: Math.max(o.cuotas, fijaMeses),
       titulo: `${nombreInstitucion(o.institucion)}: ${o.cuotas} cuotas, tasa ${pct(o.tasaMensual)} mensual`,
       totalPagar: o.ctc + fijaTotal, gastos: 0, esPropia: false, caeAnual: o.cae,
+      desglose: { capital: o.capital, intereses: o.intereses, comisiones: o.comisiones, seguros: o.seguros, total: o.ctc, cuotas: o.cuotas, cuota: o.cuota },
       fuente: { institucion: o.institucion, texto: mercado?.fuente ?? "", url: mercado?.urlFuente ?? "", fecha: mercado?.actualizado ?? null,
         montoBase: o.montoBase, escalado: o.escalado, aviso: mercado?.aviso ?? "" },
     }, actual));
@@ -259,22 +277,24 @@ export function generarOpciones(e: Credito, modo: Modo, mercado: Mercado | null 
     avisos.push("No hay tasas de mercado cargadas ni ofertas tuyas para comparar: solo te mostramos opciones que no requieren renegociar.");
   }
 
-  // Abonos: se aplican solo al crédito principal; el resto de tus deudas sigue igual.
+  // Abonos: se aplican solo al crédito de consumo; el resto de tus deudas sigue igual. Sin crédito (solo tarjetas) no hay abonos.
   const cred = rc.d;
-  const otras = deudas.filter((d) => d !== cred);
-  const otrasMeses = Math.max(0, ...otras.map((d) => d.meses));
-  const conAbono = (id: string, tipo: "abono" | "abonoUnico", titulo: string, cuotaNueva: number, abonos: Abono[]): void => {
-    const s = simularPago(cred.saldo, cred.tasa, cuotaNueva, abonos);
-    const t = tablaAmortizacion(cred.saldo, cred.tasa, cuotaNueva, abonos);
-    if (!s || !t) return;
-    cand.push(armar({ id, tipo, titulo, tasaMensual: cred.tasa, nuevaCuota: actual.cuotaTotal + (cuotaNueva - cred.pago), nuevosMeses: Math.max(s.meses, otrasMeses),
-      totalPagar: totalHoy - (cred.total - s.total), gastos: 0, esPropia: false, caeAnual: cae(cred.tasa),
-      primerosMeses: sumarTablas([t, ...otras.map((d) => d.tabla)]).slice(0, 3) }, actual));
-  };
-  const extra = Math.max(Math.round((cred.pago * 0.1) / 1000) * 1000, 1000);
-  conAbono("abono", "abono", `Sube tu cuota en ${formatCLP(extra)} (sin renegociar)`, cred.pago + extra, []);
-  if (positivo(e.abonoUnico) && e.abonoUnico < cred.saldo) {
-    conAbono("abonoUnico", "abonoUnico", `Abona ${formatCLP(e.abonoUnico)} hoy y sigue con tu cuota`, cred.pago, [{ mes: 0, monto: e.abonoUnico }]);
+  if (cred) {
+    const otras = deudas.filter((d) => d !== cred);
+    const otrasMeses = Math.max(0, ...otras.map((d) => d.meses));
+    const conAbono = (id: string, tipo: "abono" | "abonoUnico", titulo: string, cuotaNueva: number, abonos: Abono[]): void => {
+      const s = simularPago(cred.saldo, cred.tasa, cuotaNueva, abonos);
+      const t = tablaAmortizacion(cred.saldo, cred.tasa, cuotaNueva, abonos);
+      if (!s || !t) return;
+      const calendario = sumarTablas([t, ...otras.map((d) => d.tabla)]);
+      cand.push(armar({ id, tipo, titulo, tasaMensual: cred.tasa, nuevaCuota: actual.cuotaTotal + (cuotaNueva - cred.pago), nuevosMeses: Math.max(s.meses, otrasMeses),
+        totalPagar: totalHoy - (cred.total - s.total), gastos: 0, esPropia: false, caeAnual: cae(cred.tasa), primerosMeses: calendario.slice(0, 3), calendario }, actual));
+    };
+    const extra = Math.max(Math.round((cred.pago * 0.1) / 1000) * 1000, 1000);
+    conAbono("abono", "abono", `Sube tu cuota en ${formatCLP(extra)} (sin renegociar)`, cred.pago + extra, []);
+    if (positivo(e.abonoUnico) && e.abonoUnico < cred.saldo) {
+      conAbono("abonoUnico", "abonoUnico", `Abona ${formatCLP(e.abonoUnico)} hoy y sigue con tu cuota`, cred.pago, [{ mes: 0, monto: e.abonoUnico }]);
+    }
   }
 
   // ¿Tu tasa ya es mejor que la del mercado?

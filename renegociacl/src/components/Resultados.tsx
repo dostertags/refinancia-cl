@@ -84,7 +84,7 @@ function ResultadosBase({ r, modo, estadoMercado, mercado, onReintentar, accione
       {m && (
         <section aria-labelledby="mercado-mejor" className="rounded-xl border border-borde bg-superficie p-4">
           <h2 id="mercado-mejor" className="font-semibold">Tasa más competitiva del mercado</h2>
-          <p className="mt-1 text-3xl font-extrabold">{formatPct(m.menorTasa)} <span className="text-base font-medium text-suave">mensual · {nombreInstitucion(m.mejor.institucion)}</span></p>
+          <p className="mt-1 text-3xl font-extrabold">{formatPct(m.menorTasa)} <span className="text-base font-medium text-suave">mensual · {nombreInstitucion(m.mejor.institucion)}, {m.mejor.cuotas} cuotas</span></p>
           <p className="mt-1 text-sm text-suave">
             Para un crédito de consumo de {formatCLP(m.montoBase)} (el monto publicado más cercano a tus {formatCLP(r.refinanciar.total)}), {m.cantidadInstituciones} instituciones
             informan tasas desde {formatPct(m.menorTasa)} hasta {formatPct(m.peorTasa)} mensual. Fuente:{" "}

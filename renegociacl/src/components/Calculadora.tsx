@@ -117,17 +117,18 @@ function FormularioCalculadora({ inicial }: { inicial: EstadoCompartido | null }
     <div className="space-y-6">
       <section aria-labelledby="necesitas" className="no-print rounded-xl border border-borde bg-superficie p-4 text-sm">
         <h2 id="necesitas" className="mb-2 font-semibold">Qué necesitas</h2>
-        <p><Insignia id="n1" texto="Obligatorio" /> Cuánto debes y tu cuota mensual.</p>
+        <p><Insignia id="n1" texto="Obligatorio" /> Cuánto debes y tu cuota mensual de tu crédito de consumo. Si no tienes uno, deja esos campos vacíos y agrega al menos una tarjeta.</p>
         <p className="mt-2"><Insignia id="n2" texto="Una de las dos" /> Tu tasa de interés o los meses que te faltan. Si escribes una, calculamos la otra.</p>
-        <p className="mt-2"><Insignia id="n3" texto="Opcional" /> Tus tarjetas de crédito (si las agregas, escribe cuánto debes en cada una y su pago mensual o su tasa; las que dejes marcadas se suman a la deuda a refinanciar), las ofertas que te dieron y un abono de una sola vez.</p>
+        <p className="mt-2"><Insignia id="n4" texto="Obligatorio" /> En cada tarjeta que agregues: cuánto debes en ella, más su pago mensual <b>o</b> su tasa (con una basta; lo que falte lo calculamos suponiendo que se paga en 24 meses). Las tarjetas marcadas se suman a la deuda a refinanciar.</p>
+        <p className="mt-2"><Insignia id="n3" texto="Opcional" /> Las ofertas que te dieron y un abono de una sola vez.</p>
       </section>
 
       <form onSubmit={(e) => { e.preventDefault(); setCalculado(construir()); setCopiado(false); }} noValidate
         className="no-print space-y-4 rounded-2xl border border-borde bg-superficie p-4 shadow-sm sm:p-6">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Campo etiqueta="¿Cuánto debes hoy?" req="Obligatorio" valor={saldo} onCambio={(v) => setSaldo(formatearMientrasEscribe(v))} placeholder="3.000.000"
+          <Campo etiqueta="¿Cuánto debes hoy en tu crédito de consumo?" req={tarjetas.length > 0 ? "Opcional si agregas tarjeta" : "Obligatorio"} valor={saldo} onCambio={(v) => setSaldo(formatearMientrasEscribe(v))} placeholder="3.000.000"
             ayuda={<Ayuda etiqueta="¿Qué es lo que debo hoy?">Lo que todavía te falta pagar del crédito, sin contar los intereses futuros. Lo ves en tu app del banco como &quot;saldo insoluto&quot; o &quot;saldo de la deuda&quot;.</Ayuda>} />
-          <Campo etiqueta="Tu cuota mensual" req="Obligatorio" valor={cuota} onCambio={(v) => setCuota(formatearMientrasEscribe(v))} placeholder="153.000"
+          <Campo etiqueta="Tu cuota mensual" req={tarjetas.length > 0 ? "Opcional si agregas tarjeta" : "Obligatorio"} valor={cuota} onCambio={(v) => setCuota(formatearMientrasEscribe(v))} placeholder="153.000"
             ayuda={<Ayuda etiqueta="¿Qué es la cuota?">Lo que pagas cada mes por este crédito.</Ayuda>} />
         </div>
 
@@ -176,7 +177,7 @@ function FormularioCalculadora({ inicial }: { inicial: EstadoCompartido | null }
         <fieldset className="space-y-3 rounded-lg border border-borde p-3">
           <legend className="px-1 text-sm font-medium">Tarjetas de crédito (opcional)</legend>
           <p className="text-xs text-suave">Si agregas una tarjeta, escribe cuánto debes en ella y su pago mensual o su tasa (con una de las dos basta).
-            Las tarjetas que dejes marcadas se suman a la deuda a refinanciar. Puedes agregar hasta {MAX_TARJETAS}.</p>
+            Las tarjetas que dejes marcadas se suman a la deuda a refinanciar. Puedes agregar hasta {MAX_TARJETAS}. Si no tienes un crédito de consumo, basta con una tarjeta.</p>
           {tarjetas.map((tj, i) => (
             <div key={i} className="space-y-3 rounded-lg bg-superficie-2 p-3">
               <div className="grid gap-3 sm:grid-cols-2">
@@ -227,7 +228,7 @@ function FormularioCalculadora({ inicial }: { inicial: EstadoCompartido | null }
       </form>
 
       <div ref={zonaResultados} tabIndex={-1} aria-live="polite" className="space-y-4 outline-none">
-        {resultado && !resultado.ok && <div role="alert" className="rounded-xl border border-borde bg-error-fondo p-4 text-error-texto">{resultado.error}</div>}
+        {resultado && !resultado.ok && <div role="alert" className="whitespace-pre-line rounded-xl border border-borde bg-error-fondo p-4 text-error-texto">{resultado.error}</div>}
         {resultado?.ok && (
           <>
             {desactualizado && (

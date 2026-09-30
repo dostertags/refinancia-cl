@@ -32,12 +32,11 @@ export function decodificarEstado(fragmento: string): EstadoCompartido | null {
   const { credito: c, modo } = d as { credito?: Record<string, unknown>; modo?: unknown };
   if (modo !== "intereses" && modo !== "cuota") return null;
   if (!c || typeof c !== "object") return null;
-  if (!num(c.saldo, 0, 1e12, false) || !num(c.cuota, 0, 1e12, false)) return null;
-  const credito: Credito = { saldo: c.saldo, cuota: c.cuota };
-  // Regla: al menos uno entre tasa y meses restantes.
+  const credito: Credito = {};
+  if (c.saldo !== undefined) { if (!num(c.saldo, 0, 1e12)) return null; if (c.saldo > 0) credito.saldo = c.saldo; }
+  if (c.cuota !== undefined) { if (!num(c.cuota, 0, 1e12)) return null; if (c.cuota > 0) credito.cuota = c.cuota; }
   if (c.tasaMensual !== undefined) { if (!num(c.tasaMensual, 0, 0.2)) return null; credito.tasaMensual = c.tasaMensual; }
   if (c.mesesRestantes !== undefined) { if (!num(c.mesesRestantes, 0, 1200, false)) return null; credito.mesesRestantes = c.mesesRestantes; }
-  if (credito.tasaMensual === undefined && credito.mesesRestantes === undefined) return null;
   if (c.abonoUnico !== undefined) { if (!num(c.abonoUnico, 0, 1e12)) return null; credito.abonoUnico = c.abonoUnico; }
   if (c.tarjetas !== undefined) {
     if (!Array.isArray(c.tarjetas) || c.tarjetas.length > 3) return null;
@@ -54,6 +53,10 @@ export function decodificarEstado(fragmento: string): EstadoCompartido | null {
     }
     credito.tarjetas = tarjetas;
   }
+  // Regla: un crédito completo (saldo, cuota y tasa o meses) o, sin crédito, al menos una tarjeta.
+  const hayCredito = credito.saldo !== undefined || credito.cuota !== undefined;
+  if (hayCredito && (credito.saldo === undefined || credito.cuota === undefined || (credito.tasaMensual === undefined && credito.mesesRestantes === undefined))) return null;
+  if (!hayCredito && !(credito.tarjetas && credito.tarjetas.length > 0)) return null;
   if (c.ofertas !== undefined) {
     if (!Array.isArray(c.ofertas) || c.ofertas.length > 3) return null;
     const ofertas = [];

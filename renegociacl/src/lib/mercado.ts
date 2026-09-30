@@ -14,6 +14,8 @@ export interface Mercado {
 export interface OfertaMercado {
   institucion: string; cuotas: number; seguro: boolean;
   tasaMensual: number; cae: number; cuota: number; ctc: number;
+  /** ctc = capital + intereses + comisiones + seguros (cuadra exacto, en pesos enteros). */
+  capital: number; intereses: number; comisiones: number; seguros: number;
   montoBase: number; escalado: boolean;
 }
 export interface ResumenMercado {
@@ -80,6 +82,19 @@ function montoBaseCercano(montos: number[], monto: number): number | null {
   return Math.abs(mejor - monto) <= Math.max(SALTO_MONTO_MIN, SALTO_MONTO_REL * monto) ? mejor : null;
 }
 
+/** Lleva una simulación publicada a `monto` (escala lineal) y reparte su costo total en capital, intereses, comisiones y seguros. */
+function aOferta(s: SimulacionMercado, monto: number, seguro: boolean): OfertaMercado {
+  const f = monto / s.monto;
+  const ctc = Math.round(s.ctc * f);
+  const capital = Math.round(monto);
+  const comisiones = Math.round(Math.max(0, s.gastos) * f);
+  // Lo que el SERNAC no reparte en "intereses" ni "gastos" es el seguro (en las simulaciones con desgravamen).
+  const seguros = Math.max(0, Math.round((s.ctc - s.monto - s.totalInteres - s.gastos) * f));
+  const intereses = ctc - capital - comisiones - seguros;
+  return { institucion: s.institucion, cuotas: s.cuotas, seguro, tasaMensual: s.tasaMensual, cae: s.cae, cuota: Math.round(s.cuota * f), ctc,
+    capital, intereses, comisiones, seguros, montoBase: s.monto, escalado: s.monto !== monto };
+}
+
 /** Para cada plazo publicado, la simulación con menor CTC (lo que recomienda el SERNAC), llevada a `monto`. */
 export function ofertasDeMercado(m: Mercado | null, q: { monto: number; seguro: boolean }): OfertaMercado[] {
   if (!m || !(q.monto > 0)) return [];
@@ -91,23 +106,27 @@ export function ofertasDeMercado(m: Mercado | null, q: { monto: number; seguro: 
     const base = montoBaseCercano([...new Set(delPlazo.map((s) => s.monto))], q.monto);
     if (base === null) continue;
     const mejor = delPlazo.filter((s) => s.monto === base).reduce((a, b) => (b.ctc < a.ctc ? b : a));
-    const f = q.monto / base;
-    out.push({ institucion: mejor.institucion, cuotas: n, seguro: q.seguro, tasaMensual: mejor.tasaMensual, cae: mejor.cae,
-      cuota: Math.round(mejor.cuota * f), ctc: Math.round(mejor.ctc * f), montoBase: base, escalado: base !== q.monto });
+    out.push(aOferta(mejor, q.monto, q.seguro));
   }
   return out;
 }
 
-/** La tasa más competitiva del mercado para tu monto, con su fuente y fecha. null si no hay datos comparables. */
+/**
+ * La tasa MÁS BAJA publicada para tu monto (entre todas las instituciones y plazos), con su fuente y fecha.
+ * El rango "desde … hasta …" sale del mismo conjunto, así que el titular y el texto nunca se contradicen.
+ */
 export function resumirMercado(m: Mercado | null, q: { monto: number; seguro: boolean }): ResumenMercado | null {
-  const ofertas = ofertasDeMercado(m, q);
-  if (!m || ofertas.length === 0) return null;
-  const mejor = ofertas.reduce((a, b) => (b.tasaMensual < a.tasaMensual || (b.tasaMensual === a.tasaMensual && b.ctc < a.ctc) ? b : a));
-  const delMonto = m.simulaciones.filter((s) => s.seguro === q.seguro && s.monto === mejor.montoBase);
+  if (!m || !(q.monto > 0)) return null;
+  const sims = m.simulaciones.filter((s) => s.seguro === q.seguro);
+  const base = montoBaseCercano([...new Set(sims.map((s) => s.monto))], q.monto);
+  if (base === null) return null;
+  const delMonto = sims.filter((s) => s.monto === base);
+  const menor = delMonto.reduce((a, b) => (b.tasaMensual < a.tasaMensual || (b.tasaMensual === a.tasaMensual && b.ctc < a.ctc) ? b : a));
   const tasas = delMonto.map((s) => s.tasaMensual);
   return {
-    mejor, menorTasa: Math.min(...tasas), peorTasa: Math.max(...tasas), cantidadInstituciones: new Set(delMonto.map((s) => s.institucion)).size,
-    montoBase: mejor.montoBase, fuente: m.fuente, urlFuente: m.urlFuente, actualizado: m.actualizado, aviso: m.aviso, notaCae: m.notaCae,
+    mejor: aOferta(menor, q.monto, q.seguro), menorTasa: Math.min(...tasas), peorTasa: Math.max(...tasas),
+    cantidadInstituciones: new Set(delMonto.map((s) => s.institucion)).size,
+    montoBase: base, fuente: m.fuente, urlFuente: m.urlFuente, actualizado: m.actualizado, aviso: m.aviso, notaCae: m.notaCae,
   };
 }
 

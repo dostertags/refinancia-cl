@@ -11,7 +11,7 @@ export interface ResumenCredito {
 
 export function resumenComparacion(lista: CreditoGuardado[]): ResumenCredito[] {
   const filas: ResumenCredito[] = lista.map(({ id, nombre, credito }) => {
-    const base = { id, nombre, saldo: credito.saldo, cuota: credito.cuota, tasaMensual: credito.tasaMensual, prioridad: false };
+    const base = { id, nombre, saldo: credito.saldo ?? 0, cuota: credito.cuota ?? 0, tasaMensual: credito.tasaMensual, prioridad: false };
     const r = generarOpciones(credito, "intereses");
     if (!r.ok) return { ...base, error: r.error };
     const mejor = r.opciones[0];

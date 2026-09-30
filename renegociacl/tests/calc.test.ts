@@ -57,7 +57,7 @@ describe("generarOpciones: con tasas oficiales del mercado", () => {
   it("resume la situación actual", () => {
     if (!r.ok) return;
     expect(r.actual.meses).toBeGreaterThan(20);
-    expect(r.actual.intereses).toBeCloseTo(r.actual.totalPagar - base.saldo, 0);
+    expect(r.actual.intereses).toBeCloseTo(r.actual.totalPagar - base.saldo!, 0);
   });
   it("es determinista", () => expect(generarOpciones(base, "intereses", mercadoReal)).toEqual(r));
   it("las opciones de mercado citan su fuente oficial", () => {

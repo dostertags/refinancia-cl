@@ -14,11 +14,11 @@ export interface OfertaUsuario { nombre: string; tasaMensual: number; gastos?: n
 export interface TarjetaEntrada { nombre?: string; saldo?: number; pagoMensual?: number; tasaMensual?: number; incluir?: boolean }
 
 /**
- * Crédito vigente que se quiere renegociar. OBLIGATORIO: saldo y cuota, más al menos uno entre
- * tasaMensual y mesesRestantes (si falta uno, se calcula a partir del otro).
+ * Crédito vigente que se quiere renegociar. OBLIGATORIO (si no hay tarjetas): saldo y cuota, más al menos uno entre
+ * tasaMensual y mesesRestantes (si falta uno, se calcula a partir del otro). Sin crédito de consumo basta con una tarjeta.
  */
 export interface Credito {
-  saldo: number; cuota: number;
+  saldo?: number; cuota?: number; // pueden faltar solo si hay al menos una tarjeta con datos
   tasaMensual?: number;
   mesesRestantes?: number;
   tarjetas?: TarjetaEntrada[]; // hasta 3
@@ -37,6 +37,9 @@ export type TipoOpcion = "tasa" | "cuota" | "plazo" | "abono" | "abonoUnico" | "
 /** De dónde salen las cifras de una opción de mercado. */
 export interface FuenteOpcion { institucion: string; texto: string; url: string; fecha: string | null; montoBase: number; escalado: boolean; aviso: string }
 
+/** De qué está hecho el costo total de una simulación del SERNAC: capital + intereses + comisiones + seguros = total. */
+export interface Desglose { capital: number; intereses: number; comisiones: number; seguros: number; total: number; cuotas: number; cuota: number }
+
 export interface OpcionRenegociacion {
   id: string; tipo: TipoOpcion; titulo: string; tasaMensual: number;
   nuevaCuota: number;      // lo que pagarías al mes en total (incluye lo que quede fuera del refinanciamiento)
@@ -50,7 +53,9 @@ export interface OpcionRenegociacion {
   esPropia: boolean;       // parte de una oferta real que ingresó la persona
   fuente?: FuenteOpcion;   // solo opciones de mercado: fuente oficial citada
   resumen: string;         // explicación en lenguaje simple
-  primerosMeses?: FilaAmortizacion[]; // para mostrar cómo se calcula
+  primerosMeses?: FilaAmortizacion[]; // primeros 3 meses (vista rápida)
+  calendario?: FilaAmortizacion[];    // TODOS los meses, sumando lo refinanciado y lo que queda fuera
+  desglose?: Desglose;                // solo opciones de mercado
 }
 /** Alias histórico. */
 export type Opcion = OpcionRenegociacion;
@@ -60,6 +65,7 @@ export interface FilaTasa { nombre: string; tasaMensual: number; caeAnual: numbe
 export interface Actual {
   meses: number; totalPagar: number; intereses: number; caeAnual: number; cuotaTotal: number;
   primerosMeses: FilaAmortizacion[];
+  calendario: FilaAmortizacion[];
 }
 export interface ParteDeuda { nombre: string; saldo: number }
 /** Qué se junta en el crédito nuevo y qué se deja como está. */

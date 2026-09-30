@@ -3,24 +3,46 @@ import { formatCLP, formatFecha, formatPct } from "@/lib/format";
 import { nombreInstitucion } from "@/lib/mercado";
 import type { Actual, OpcionRenegociacion } from "@/lib/tipos";
 
+const sum = (filas: FilaAmortizacion[], k: "pago" | "interes" | "capital" | "abono"): number => filas.reduce((a, f) => a + f[k], 0);
+
+/** Calendario COMPLETO mes a mes (con scroll si es largo) y una fila de totales que cuadra con el "costo total". */
 function TablaMeses({ titulo, filas }: { titulo: string; filas: FilaAmortizacion[] }) {
   const hayAbono = filas.some((f) => f.abono > 0);
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[26rem] text-right text-xs">
-        <caption className="pb-1 text-left text-sm font-medium">{titulo}</caption>
-        <thead><tr className="border-b border-borde text-suave">
-          <th scope="col" className="py-1 text-left">Mes</th><th scope="col">Pagas</th><th scope="col">Interés</th>
-          <th scope="col">Baja tu deuda</th>{hayAbono && <th scope="col">Abono</th>}<th scope="col">Te queda debiendo</th>
+    <div className="overflow-auto rounded-lg border border-borde" style={{ maxHeight: "18rem" }} tabIndex={0} aria-label={`${titulo}, tabla con desplazamiento`}>
+      <table className="w-full min-w-[30rem] text-right text-xs">
+        <caption className="bg-superficie-2 px-2 py-1 text-left text-sm font-medium">{titulo} ({filas.length} {filas.length === 1 ? "mes" : "meses"})</caption>
+        <thead><tr className="sticky top-0 border-b border-borde bg-superficie text-suave">
+          <th scope="col" className="px-2 py-1 text-left">Mes</th><th scope="col" className="px-2">Pagas</th><th scope="col" className="px-2">Interés</th>
+          <th scope="col" className="px-2">Baja tu deuda</th>{hayAbono && <th scope="col" className="px-2">Abono</th>}<th scope="col" className="px-2">Te queda debiendo</th>
         </tr></thead>
         <tbody>{filas.map((f) => (
-          <tr key={f.mes} className="border-b border-borde last:border-0">
-            <th scope="row" className="py-1 text-left font-normal">{f.mes === 0 ? "Hoy" : f.mes}</th><td>{formatCLP(f.pago)}</td><td>{formatCLP(f.interes)}</td>
-            <td>{formatCLP(f.capital)}</td>{hayAbono && <td>{f.abono > 0 ? formatCLP(f.abono) : "-"}</td>}<td>{formatCLP(f.saldo)}</td>
+          <tr key={f.mes} className="border-b border-borde">
+            <th scope="row" className="px-2 py-1 text-left font-normal">{f.mes === 0 ? "Hoy" : f.mes}</th><td className="px-2">{formatCLP(f.pago)}</td><td className="px-2">{formatCLP(f.interes)}</td>
+            <td className="px-2">{formatCLP(f.capital)}</td>{hayAbono && <td className="px-2">{f.abono > 0 ? formatCLP(f.abono) : "-"}</td>}<td className="px-2">{formatCLP(f.saldo)}</td>
           </tr>))}
         </tbody>
+        <tfoot><tr className="font-semibold">
+          <th scope="row" className="px-2 py-1 text-left">Total</th><td className="px-2">{formatCLP(sum(filas, "pago") + sum(filas, "abono"))}</td><td className="px-2">{formatCLP(sum(filas, "interes"))}</td>
+          <td className="px-2">{formatCLP(sum(filas, "capital"))}</td>{hayAbono && <td className="px-2">{formatCLP(sum(filas, "abono"))}</td>}<td className="px-2" />
+        </tr></tfoot>
       </table>
     </div>
+  );
+}
+
+/** De qué está hecho el costo total informado al SERNAC (capital + intereses + comisiones + seguros = total). */
+function DesgloseMercado({ d }: { d: NonNullable<OpcionRenegociacion["desglose"]> }) {
+  const filas: [string, number][] = [["Lo que pides prestado (capital)", d.capital], ["Intereses", d.intereses]];
+  if (d.comisiones > 0) filas.push(["Comisiones y gastos", d.comisiones]);
+  if (d.seguros > 0) filas.push(["Seguros (desgravamen y otros)", d.seguros]);
+  return (
+    <table className="w-full max-w-md text-right text-sm">
+      <caption className="pb-1 text-left text-sm font-medium">De qué está hecho el costo total</caption>
+      <tbody>{filas.map(([t, v]) => <tr key={t} className="border-b border-borde"><th scope="row" className="py-1 text-left font-normal">{t}</th><td>{formatCLP(v)}</td></tr>)}</tbody>
+      <tfoot><tr className="font-semibold"><th scope="row" className="py-1 text-left">Costo total del crédito (CTC)</th><td>{formatCLP(d.total)}</td></tr>
+        <tr className="text-xs text-suave"><th scope="row" className="py-1 text-left font-normal">Se paga en {d.cuotas} cuotas de</th><td>{formatCLP(d.cuota)}</td></tr></tfoot>
+    </table>
   );
 }
 
@@ -58,11 +80,15 @@ export default function OpcionCard({ o, rango, actual }: { o: OpcionRenegociacio
           <p>Cada mes el banco cobra interés sobre lo que aún debes: <b>interés = lo que debes × la tasa</b>. Del resto de tu cuota, una parte baja tu deuda.
             Con una tasa menor pagas menos interés y tu deuda baja más rápido.</p>
           {o.tipo === "mercado" ? (
-            <p>La cuota, la tasa, el CAE y el costo total los informó la institución al SERNAC para un crédito de consumo. No son una oferta ni una aprobación: tu condición real depende de la evaluación de la institución. Cotiza en al menos tres.</p>
-          ) : o.primerosMeses ? (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <TablaMeses titulo="Primeros meses: hoy" filas={actual.primerosMeses} />
-              <TablaMeses titulo="Primeros meses: con esta opción" filas={o.primerosMeses} />
+            <>
+              <p>La cuota, la tasa, el CAE y el costo total los informó la institución al SERNAC para un crédito de consumo. No son una oferta ni una aprobación: tu condición real depende de la evaluación de la institución. Cotiza en al menos tres.</p>
+              {o.desglose && <DesgloseMercado d={o.desglose} />}
+              <p className="text-xs text-suave">Ojo: lo que pagas &quot;hoy&quot; solo cuenta capital e intereses de tus deudas actuales. Esta simulación incluye además los seguros y comisiones que informó la institución, por eso el ahorro real podría ser algo mayor si tus deudas de hoy también los pagan.</p>
+            </>
+          ) : o.calendario ? (
+            <div className="space-y-3">
+              <TablaMeses titulo="Hoy, sin cambiar nada" filas={actual.calendario} />
+              <TablaMeses titulo="Con esta opción" filas={o.calendario} />
             </div>
           ) : (
             <p>Esta opción no tiene desglose mes a mes.</p>

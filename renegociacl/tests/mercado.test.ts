@@ -114,3 +114,28 @@ describe("resumirMercado", () => {
   });
   it("null si no hay datos", () => expect(resumirMercado(null, { monto: 1, seguro: true })).toBeNull());
 });
+
+describe("titular de la tasa más competitiva y desglose del costo", () => {
+  const datos = parseMercado(JSON.parse(JSON.stringify(subset)))!;
+  it("el titular es la tasa más baja del conjunto: nunca dice 'desde X' con un titular distinto", () => {
+    for (const monto of [2_000_000, 4_500_000, 7_000_000, 9_000_000]) {
+      for (const seguro of [true, false]) {
+        const r = resumirMercado(datos, { monto, seguro });
+        if (!r) continue;
+        expect(r.mejor.tasaMensual).toBe(r.menorTasa);
+        expect(r.menorTasa).toBeLessThanOrEqual(r.peorTasa);
+      }
+    }
+  });
+  it("capital + intereses + comisiones + seguros = costo total, al peso, también escalado a tu monto", () => {
+    for (const monto of [2_300_000, 4_500_000, 7_000_000, 8_900_000]) {
+      for (const o of ofertasDeMercado(datos, { monto, seguro: true })) {
+        expect(o.capital).toBe(monto);
+        expect(o.capital + o.intereses + o.comisiones + o.seguros).toBe(o.ctc);
+        expect(o.intereses).toBeGreaterThan(0);
+        expect(o.comisiones).toBeGreaterThanOrEqual(0);
+        expect(o.seguros).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+});
