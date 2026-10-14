@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// Flujo completo de 4 pasos contra la app real (ofertas de la semilla ilustrativa si no hay datos SERNAC).
+// Flujo completo de 4 pasos contra la app real (ofertas del comparador SERNAC, o de la semilla ilustrativa si no hay datos SERNAC).
 test("el usuario simula y ve avisos legales, origen de ofertas y glosario", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel(/renta líquida mensual/i).fill("1500000");
@@ -16,7 +16,7 @@ test("el usuario simula y ve avisos legales, origen de ofertas y glosario", asyn
 
   await expect(page.getByText(/no constituye una oferta de crédito/i).first()).toBeVisible();
   await expect(page.getByText(/derecho a retracto/i).first()).toBeVisible();
-  await expect(page.getByText(/ilustrativas|Comparador de Créditos SERNAC/i).first()).toBeVisible();
+  await expect(page.getByText(/ilustrativas|Comparador de créditos de consumo del SERNAC/i).first()).toBeVisible();
   await page.getByText(/qué significan CAE/i).click();
   await expect(page.getByText(/Carga Anual Equivalente/i)).toBeVisible();
 
